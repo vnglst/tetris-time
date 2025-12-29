@@ -51,11 +51,17 @@ const BASE_DROP_DURATION = 500; // ms per row (gravity interval)
 const BASE_PIECE_DELAY = 600; // ms between pieces
 const BASE_ROTATE_DURATION = 400; // ms per rotation step
 const BASE_THINK_DURATION = 300; // ms pause before rotating (human-like thinking)
+const BASE_DISPLAY_PAUSE = 2000; // ms to display completed time before clearing
+const BASE_ROW_CLEAR_DELAY = 80; // ms between each row clearing
+const BASE_FLASH_DURATION = 100; // ms for each flash cycle
 
 const DROP_DURATION = scaleMs(BASE_DROP_DURATION, MIN_ANIM_STEP_MS);
 const PIECE_DELAY = scaleMs(BASE_PIECE_DELAY, 0);
 const ROTATE_DURATION = scaleMs(BASE_ROTATE_DURATION, MIN_ANIM_STEP_MS);
 const THINK_DURATION = scaleMs(BASE_THINK_DURATION, 0);
+const DISPLAY_PAUSE = scaleMs(BASE_DISPLAY_PAUSE, 0);
+const ROW_CLEAR_DELAY = scaleMs(BASE_ROW_CLEAR_DELAY, MIN_ANIM_STEP_MS);
+const FLASH_DURATION = scaleMs(BASE_FLASH_DURATION, MIN_ANIM_STEP_MS);
 
 class TetrisClock {
   private container: HTMLElement;
@@ -272,6 +278,9 @@ class TetrisClock {
       await this.animatePieceDrop(seqPiece);
       await this.delay(PIECE_DELAY);
     }
+
+    // Classic Tetris clear animation after time is fully displayed
+    await this.clearRowsAnimation();
   }
 
   private async animatePieceDrop(seqPiece: SequencedPiece): Promise<void> {
@@ -429,6 +438,78 @@ class TetrisClock {
 
   private nextFrame(): Promise<number> {
     return new Promise((resolve) => requestAnimationFrame(resolve));
+  }
+
+  private async clearRowsAnimation(): Promise<void> {
+    if (!this.grid) return;
+
+    // Pause to let the user see the completed time
+    await this.delay(DISPLAY_PAUSE);
+
+    // Store original colors before flashing
+    const originalColors: Map<string, string> = new Map();
+    for (let row = 0; row < FIELD_ROWS; row++) {
+      for (let col = 0; col < FIELD_COLS; col++) {
+        const cell = this.getCell(row, col);
+        if (cell && !cell.classList.contains("empty")) {
+          originalColors.set(this.cellKey(row, col), cell.style.backgroundColor);
+        }
+      }
+    }
+
+    // Classic Tetris flash effect - blink all filled cells
+    const flashCount = 4;
+    for (let flash = 0; flash < flashCount; flash++) {
+      // Flash to white
+      for (const [key] of originalColors) {
+        const [row, col] = key.split(",").map(Number);
+        const cell = this.getCell(row, col);
+        if (cell) {
+          cell.style.backgroundColor = "#ffffff";
+        }
+      }
+      await this.delay(FLASH_DURATION);
+
+      // Flash back to original color
+      for (const [key, color] of originalColors) {
+        const [row, col] = key.split(",").map(Number);
+        const cell = this.getCell(row, col);
+        if (cell) {
+          cell.style.backgroundColor = color;
+        }
+      }
+      await this.delay(FLASH_DURATION);
+    }
+
+    // Clear rows from bottom to top (classic Tetris style)
+    for (let row = FIELD_ROWS - 1; row >= 0; row--) {
+      let hasFilledCell = false;
+
+      // Check if row has any filled cells
+      for (let col = 0; col < FIELD_COLS; col++) {
+        const cell = this.getCell(row, col);
+        if (cell && !cell.classList.contains("empty")) {
+          hasFilledCell = true;
+          break;
+        }
+      }
+
+      if (hasFilledCell) {
+        // Clear this row with a quick animation
+        for (let col = 0; col < FIELD_COLS; col++) {
+          const cell = this.getCell(row, col);
+          if (cell && !cell.classList.contains("empty")) {
+            cell.className = "cell empty";
+            cell.style.backgroundColor = "";
+            cell.style.opacity = "";
+            cell.style.transform = "";
+          }
+        }
+        await this.delay(ROW_CLEAR_DELAY);
+      }
+    }
+
+    this.lockedCells.clear();
   }
 }
 
