@@ -1,4 +1,3 @@
-import anime from 'animejs';
 import {
   tileTime,
   sequenceTime,
@@ -7,7 +6,8 @@ import {
   type TileResult,
   type SequenceResult,
   type SequencedPiece,
-  type PlacedTetromino,
+  TETROMINOES,
+  getAbsoluteCells,
 } from '../src/index';
 
 // Color mapping for digit tetrominos (lit cells)
@@ -35,6 +35,7 @@ class TetrisClock {
   private colonElement: HTMLElement | null = null;
   private currentTime: { hours: number; minutes: number } | null = null;
   private isAnimating = false;
+  private lockedCellsByDigit: Set<string>[] = [];
 
   constructor(containerId: string) {
     const container = document.getElementById(containerId);
@@ -51,6 +52,7 @@ class TetrisClock {
     for (let i = 0; i < 4; i++) {
       const grid = this.createDigitGrid();
       this.digitGrids.push(grid);
+      this.lockedCellsByDigit.push(new Set());
       this.container.appendChild(grid);
 
       // Add colon after second digit
@@ -102,11 +104,39 @@ class TetrisClock {
     const grid = this.digitGrids[gridIndex];
     if (!grid) return;
 
+    this.lockedCellsByDigit[gridIndex]?.clear();
+
     const cells = grid.querySelectorAll('.cell');
     cells.forEach((cell) => {
       cell.className = 'cell empty';
       (cell as HTMLElement).style.backgroundColor = '';
+      (cell as HTMLElement).style.opacity = '';
+      (cell as HTMLElement).style.transform = '';
     });
+  }
+
+  private cellKey(row: number, col: number): string {
+    return `${row},${col}`;
+  }
+
+  private setCellOccupied(gridIndex: number, row: number, col: number, pieceType: string, color: string) {
+    const cell = this.getCell(gridIndex, row, col);
+    if (!cell) return;
+    cell.className = `cell ${pieceType}`;
+    cell.style.backgroundColor = color;
+    cell.style.opacity = '1';
+    cell.style.transform = '';
+  }
+
+  private setCellEmptyIfUnlocked(gridIndex: number, row: number, col: number) {
+    const locked = this.lockedCellsByDigit[gridIndex];
+    if (locked?.has(this.cellKey(row, col))) return;
+    const cell = this.getCell(gridIndex, row, col);
+    if (!cell) return;
+    cell.className = 'cell empty';
+    cell.style.backgroundColor = '';
+    cell.style.opacity = '';
+    cell.style.transform = '';
   }
 
   private async updateTime() {
@@ -180,44 +210,94 @@ class TetrisClock {
     // Digit pieces get colorful tetromino colors, background pieces get uniform dark blue
     const color = piece.isLit ? DIGIT_COLORS[piece.type] : BACKGROUND_COLOR;
 
-    // Get the cells this piece will occupy
-    const cells: HTMLElement[] = [];
-    for (const cellPos of piece.cells) {
-      const cell = this.getCell(gridIndex, cellPos.row, cellPos.col);
-      if (cell) cells.push(cell);
+    const tetromino = TETROMINOES[piece.type];
+    const locked = this.lockedCellsByDigit[gridIndex];
+    const activeKeys = new Set<string>();
+
+    // We simulate the sequencer's step list so the piece occupies real cells as it moves.
+    // This matches classic "block-wise" Tetris motion more closely than translating final cells.
+    let currentAnchor = { row: piece.anchor.row, col: piece.anchor.col };
+    let currentRotation = 0;
+
+    // Derive a reasonable step timing for non-drop actions.
+    const nudgeDuration = Math.max(40, Math.floor(DROP_DURATION / 3));
+
+    const renderAt = () => {
+      // Clear previous active cells (but never clear locked cells)
+      for (const key of activeKeys) {
+        const [r, c] = key.split(',').map(Number);
+        if (Number.isFinite(r) && Number.isFinite(c)) {
+          this.setCellEmptyIfUnlocked(gridIndex, r, c);
+        }
+      }
+      activeKeys.clear();
+
+      const absCells = getAbsoluteCells(tetromino, currentRotation, currentAnchor);
+      for (const cell of absCells) {
+        // Don't attempt to draw above the grid (negative rows)
+        if (cell.row < 0) continue;
+        if (cell.row >= DIGIT_ROWS) continue;
+        if (cell.col < 0 || cell.col >= DIGIT_COLS) continue;
+
+        const key = this.cellKey(cell.row, cell.col);
+        activeKeys.add(key);
+        this.setCellOccupied(gridIndex, cell.row, cell.col, piece.type, color);
+      }
+    };
+
+    for (const step of seqPiece.steps) {
+      switch (step.action) {
+        case 'spawn': {
+          currentAnchor = {
+            row: step.row ?? currentAnchor.row,
+            col: step.col ?? currentAnchor.col,
+          };
+          currentRotation = 0;
+          renderAt();
+          await this.delay(nudgeDuration);
+          break;
+        }
+        case 'rotate': {
+          currentRotation = (currentRotation + 1) % tetromino.rotations.length;
+          renderAt();
+          await this.delay(nudgeDuration);
+          break;
+        }
+        case 'move': {
+          currentAnchor = {
+            row: currentAnchor.row,
+            col: step.col ?? currentAnchor.col,
+          };
+          renderAt();
+          await this.delay(nudgeDuration);
+          break;
+        }
+        case 'drop': {
+          currentAnchor = {
+            row: step.row ?? currentAnchor.row,
+            col: step.col ?? currentAnchor.col,
+          };
+          renderAt();
+          await this.delay(DROP_DURATION);
+          break;
+        }
+        case 'lock': {
+          currentAnchor = {
+            row: step.row ?? currentAnchor.row,
+            col: step.col ?? currentAnchor.col,
+          };
+          // Render final position one last time.
+          renderAt();
+
+          // Convert current active cells to locked cells.
+          for (const key of activeKeys) {
+            locked?.add(key);
+          }
+          activeKeys.clear();
+          break;
+        }
+      }
     }
-
-    if (cells.length === 0) return;
-
-    // Calculate drop distance (from top to final position)
-    const minRow = Math.min(...piece.cells.map((c) => c.row));
-    const dropDistance = minRow + 1; // +1 because we start above the grid
-
-    // Animate the drop
-    return new Promise((resolve) => {
-      // Set initial state (transparent, above position)
-      cells.forEach((cell) => {
-        cell.style.backgroundColor = color;
-        cell.style.opacity = '0';
-        cell.style.transform = `translateY(-${dropDistance * 26}px)`;
-        cell.className = `cell ${piece.type}`;
-      });
-
-      // Animate to final position
-      anime({
-        targets: cells,
-        translateY: 0,
-        opacity: 1,
-        duration: DROP_DURATION * dropDistance,
-        easing: 'easeOutQuad',
-        complete: () => {
-          cells.forEach((cell) => {
-            cell.style.transform = '';
-          });
-          resolve();
-        },
-      });
-    });
   }
 
   private delay(ms: number): Promise<void> {
