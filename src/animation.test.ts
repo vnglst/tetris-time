@@ -52,7 +52,7 @@ describe("estimateAnimationDurationMs", () => {
 
     const configA = {
       fieldTopPaddingRows: 10,
-      nudgeDurationMs: 20,
+      nudgeDurationMs: 0, // Zero so gravityTime always dominates actionTime
       rotateDurationMs: 30,
       hardDropDurationMs: 4,
       pieceDelayMs: 0,
