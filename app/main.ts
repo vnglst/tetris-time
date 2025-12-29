@@ -34,10 +34,10 @@ const PIECE_DELAY = 350; // ms between pieces
 const ROTATE_DURATION = 240; // ms per rotation step
 
 // Hard drop + de-sync jitter
-const HARD_DROP_DURATION = 40; // ms per row once positioned
+const HARD_DROP_DURATION = 50; // ms per row once positioned
 const HARD_DROP_JITTER = 25; // +/- ms
-const DIGIT_START_JITTER_MAX = 100; // ms
-const PIECE_DELAY_JITTER = 800; // +/- ms
+const DIGIT_START_JITTER_MAX = 300; // ms
+const PIECE_DELAY_JITTER = 400; // +/- ms
 
 class TetrisClock {
   private container: HTMLElement;
@@ -224,7 +224,7 @@ class TetrisClock {
 
     const tetromino = TETROMINOES[piece.type];
     const locked = this.lockedCellsByDigit[gridIndex];
-    const activeKeys = new Set<string>();
+    let activeKeys = new Set<string>();
 
     const rotationCount = tetromino.rotations.length;
     const targetRotation = ((piece.rotationIndex % rotationCount) + rotationCount) % rotationCount;
@@ -248,16 +248,9 @@ class TetrisClock {
     const rotateDuration = Math.max(ROTATE_DURATION, nudgeDuration);
 
     const renderAt = () => {
-      // Clear previous active cells (but never clear locked cells)
-      for (const key of activeKeys) {
-        const [r, c] = key.split(",").map(Number);
-        if (Number.isFinite(r) && Number.isFinite(c)) {
-          this.setCellEmptyIfUnlocked(gridIndex, r, c);
-        }
-      }
-      activeKeys.clear();
-
+      const nextKeys = new Set<string>();
       const absCells = getAbsoluteCells(tetromino, currentRotation, currentAnchor);
+
       for (const cell of absCells) {
         const visualRow = cell.row + FIELD_TOP_PADDING_ROWS;
         const visualCol = cell.col;
@@ -265,10 +258,28 @@ class TetrisClock {
         if (visualRow < 0 || visualRow >= FIELD_ROWS) continue;
         if (visualCol < 0 || visualCol >= DIGIT_COLS) continue;
 
-        const key = this.cellKey(visualRow, visualCol);
-        activeKeys.add(key);
-        this.setCellOccupied(gridIndex, visualRow, visualCol, piece.type, color);
+        nextKeys.add(this.cellKey(visualRow, visualCol));
       }
+
+      // Clear only cells we are leaving (avoids flicker on overlapping rotations)
+      for (const key of activeKeys) {
+        if (nextKeys.has(key)) continue;
+        const [r, c] = key.split(",").map(Number);
+        if (Number.isFinite(r) && Number.isFinite(c)) {
+          this.setCellEmptyIfUnlocked(gridIndex, r, c);
+        }
+      }
+
+      // Paint only newly occupied cells
+      for (const key of nextKeys) {
+        if (activeKeys.has(key)) continue;
+        const [r, c] = key.split(",").map(Number);
+        if (Number.isFinite(r) && Number.isFinite(c)) {
+          this.setCellOccupied(gridIndex, r, c, piece.type, color);
+        }
+      }
+
+      activeKeys = nextKeys;
     };
 
     const spawnStep = seqPiece.steps.find((s) => s.action === "spawn");
@@ -318,7 +329,7 @@ class TetrisClock {
     for (const key of activeKeys) {
       locked?.add(key);
     }
-    activeKeys.clear();
+    activeKeys = new Set();
   }
 
   private delay(ms: number): Promise<void> {
