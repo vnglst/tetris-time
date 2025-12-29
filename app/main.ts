@@ -50,10 +50,12 @@ const scaleMs = (baseMs: number, minMs = 0): number => Math.max(minMs, Math.roun
 const BASE_DROP_DURATION = 500; // ms per row (gravity interval)
 const BASE_PIECE_DELAY = 600; // ms between pieces
 const BASE_ROTATE_DURATION = 400; // ms per rotation step
+const BASE_THINK_DURATION = 300; // ms pause before rotating (human-like thinking)
 
 const DROP_DURATION = scaleMs(BASE_DROP_DURATION, MIN_ANIM_STEP_MS);
 const PIECE_DELAY = scaleMs(BASE_PIECE_DELAY, 0);
 const ROTATE_DURATION = scaleMs(BASE_ROTATE_DURATION, MIN_ANIM_STEP_MS);
+const THINK_DURATION = scaleMs(BASE_THINK_DURATION, 0);
 
 class TetrisClock {
   private container: HTMLElement;
@@ -361,7 +363,8 @@ class TetrisClock {
 
     // Time-based animation loop: gravity runs continuously while actions execute
     let lastGravityTime = performance.now();
-    let lastActionTime = performance.now();
+    // Offset action time by THINK_DURATION to create a "thinking" pause before rotating
+    let lastActionTime = performance.now() + THINK_DURATION;
     let actionIndex = 0;
     const frameDelay = 16; // ~60fps
 
