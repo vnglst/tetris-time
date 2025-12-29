@@ -41,7 +41,7 @@ const COLON_GAP_COLS = TIME_COLON_GAP_COLS;
 
 // Animation speed
 // Increase to speed up everything (e.g. 2 = ~2x faster, 0.5 = ~2x slower).
-const SPEED = 1;
+const SPEED = 5;
 
 const MIN_ANIM_STEP_MS = 16;
 const scaleMs = (baseMs: number, minMs = 0): number => Math.max(minMs, Math.round(baseMs / SPEED));
@@ -362,15 +362,15 @@ class TetrisClock {
     renderAt();
 
     // Time-based animation loop: gravity runs continuously while actions execute
-    let lastGravityTime = performance.now();
+    const startTime = performance.now();
+    let lastGravityTime = startTime;
     // Offset action time by THINK_DURATION to create a "thinking" pause before rotating
-    let lastActionTime = performance.now() + THINK_DURATION;
+    let lastActionTime = startTime + THINK_DURATION;
     let actionIndex = 0;
-    const frameDelay = 16; // ~60fps
 
     // Continue until piece reaches final row AND all actions are complete
     while (currentAnchor.row < piece.anchor.row || actionIndex < actions.length) {
-      const now = performance.now();
+      const now = await this.nextFrame();
       let stateChanged = false;
 
       // Apply gravity if enough time has passed and we haven't reached final row
@@ -407,12 +407,10 @@ class TetrisClock {
         while (currentAnchor.row < piece.anchor.row) {
           currentAnchor = { row: currentAnchor.row + 1, col: currentAnchor.col };
           renderAt();
-          await this.delay(frameDelay);
+          await this.nextFrame();
         }
         break;
       }
-
-      await this.delay(frameDelay);
     }
 
     // Lock at final position
@@ -425,7 +423,12 @@ class TetrisClock {
   }
 
   private delay(ms: number): Promise<void> {
+    if (ms <= 0) return Promise.resolve();
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private nextFrame(): Promise<number> {
+    return new Promise((resolve) => requestAnimationFrame(resolve));
   }
 }
 
