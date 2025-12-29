@@ -3,6 +3,16 @@ import { Grid, resetPieceIdCounter } from "./grid";
 import { TETROMINOES, TETROMINO_TYPES } from "./tetrominoes";
 import { DIGIT_PATTERNS, DIGIT_ROWS, DIGIT_COLS } from "./digits";
 
+/** Default spacing (in columns) between digits inside a unified HH:MM grid. */
+export const TIME_DIGIT_GAP_COLS = 2;
+
+/** Default spacing (in columns) for the HH|MM separator area (where the colon sits visually). */
+export const TIME_COLON_GAP_COLS = 4;
+
+/** Unified time grid dimensions (HH:MM rendered into one solver grid). */
+export const TIME_ROWS = DIGIT_ROWS;
+export const TIME_COLS = DIGIT_COLS * 4 + TIME_DIGIT_GAP_COLS * 2 + TIME_COLON_GAP_COLS;
+
 /** Default maximum attempts before giving up */
 const DEFAULT_MAX_ATTEMPTS = 1_000_000;
 
@@ -223,4 +233,174 @@ export function tileTime(hours: number, minutes: number, options?: TileOptions):
     tileDigit(m1, { ...options, seed: baseSeed + 2 }),
     tileDigit(m2, { ...options, seed: baseSeed + 3 }),
   ];
+}
+
+function validateTime(hours: number, minutes: number): void {
+  if (hours < 0 || hours > 23 || !Number.isInteger(hours)) {
+    throw new Error(`Invalid hours: ${hours}. Must be an integer 0-23.`);
+  }
+  if (minutes < 0 || minutes > 59 || !Number.isInteger(minutes)) {
+    throw new Error(`Invalid minutes: ${minutes}. Must be an integer 0-59.`);
+  }
+}
+
+function buildTimeMask(
+  hours: number,
+  minutes: number,
+  digitGapCols = TIME_DIGIT_GAP_COLS,
+  colonGapCols = TIME_COLON_GAP_COLS
+): DigitMask {
+  validateTime(hours, minutes);
+
+  const h1 = Math.floor(hours / 10);
+  const h2 = hours % 10;
+  const m1 = Math.floor(minutes / 10);
+  const m2 = minutes % 10;
+  const digitValues = [h1, h2, m1, m2];
+
+  const gaps = [digitGapCols, colonGapCols, digitGapCols];
+  const cols = DIGIT_COLS * 4 + gaps.reduce((sum, g) => sum + g, 0);
+
+  const mask: DigitMask = Array.from({ length: DIGIT_ROWS }, () => Array(cols).fill(false));
+
+  let colOffset = 0;
+  for (let digitIndex = 0; digitIndex < 4; digitIndex++) {
+    const digit = digitValues[digitIndex];
+    const digitMask = DIGIT_PATTERNS[digit];
+
+    for (let row = 0; row < DIGIT_ROWS; row++) {
+      for (let col = 0; col < DIGIT_COLS; col++) {
+        mask[row][colOffset + col] = digitMask[row][col];
+      }
+    }
+
+    colOffset += DIGIT_COLS;
+    if (digitIndex < 3) {
+      colOffset += gaps[digitIndex] ?? 0;
+    }
+  }
+
+  return mask;
+}
+
+/**
+ * Tile a full time display (HH:MM) into one unified grid.
+ *
+ * This enables a single continuous playfield/animation where pieces drop
+ * one-by-one across the entire display.
+ */
+export function tileTimeGrid(
+  hours: number,
+  minutes: number,
+  options?: TileOptions & {
+    digitGapCols?: number;
+    colonGapCols?: number;
+  }
+): TileResult {
+  validateTime(hours, minutes);
+
+  const digitGapCols = options?.digitGapCols ?? TIME_DIGIT_GAP_COLS;
+  const colonGapCols = options?.colonGapCols ?? TIME_COLON_GAP_COLS;
+  const totalCols = DIGIT_COLS * 4 + digitGapCols * 2 + colonGapCols;
+
+  const baseSeed = seedToNumber(options?.seed);
+
+  const h1 = Math.floor(hours / 10);
+  const h2 = hours % 10;
+  const m1 = Math.floor(minutes / 10);
+  const m2 = minutes % 10;
+  const digits = [h1, h2, m1, m2];
+
+  const gapMask = (cols: number): DigitMask => Array.from({ length: DIGIT_ROWS }, () => Array(cols).fill(false));
+
+  // Tile each region separately for reliability:
+  // digits are well-behaved 10x6 masks; gaps are uniform "unlit" rectangles.
+  const d0 = tileDigit(digits[0], { ...options, seed: baseSeed });
+  const g0 = tileGrid(DIGIT_ROWS, digitGapCols, gapMask(digitGapCols), {
+    ...options,
+    seed: baseSeed + 10,
+  });
+  const d1 = tileDigit(digits[1], { ...options, seed: baseSeed + 1 });
+  const g1 = tileGrid(DIGIT_ROWS, colonGapCols, gapMask(colonGapCols), {
+    ...options,
+    seed: baseSeed + 11,
+  });
+  const d2 = tileDigit(digits[2], { ...options, seed: baseSeed + 2 });
+  const g2 = tileGrid(DIGIT_ROWS, digitGapCols, gapMask(digitGapCols), {
+    ...options,
+    seed: baseSeed + 12,
+  });
+  const d3 = tileDigit(digits[3], { ...options, seed: baseSeed + 3 });
+
+  const parts = [
+    { result: d0, colOffset: 0 },
+    { result: g0, colOffset: DIGIT_COLS },
+    { result: d1, colOffset: DIGIT_COLS + digitGapCols },
+    { result: g1, colOffset: DIGIT_COLS * 2 + digitGapCols },
+    { result: d2, colOffset: DIGIT_COLS * 2 + digitGapCols + colonGapCols },
+    { result: g2, colOffset: DIGIT_COLS * 3 + digitGapCols + colonGapCols },
+    { result: d3, colOffset: DIGIT_COLS * 3 + digitGapCols * 2 + colonGapCols },
+  ];
+
+  if (parts.some((p) => !p.result.success)) {
+    return {
+      success: false,
+      pieces: [],
+      grid: Array.from({ length: DIGIT_ROWS }, () => Array(totalCols).fill(null)),
+      stats: {
+        attempts: parts.reduce((sum, p) => sum + (p.result.stats?.attempts ?? 0), 0),
+        backtracks: parts.reduce((sum, p) => sum + (p.result.stats?.backtracks ?? 0), 0),
+        duration: parts.reduce((sum, p) => sum + (p.result.stats?.duration ?? 0), 0),
+      },
+    };
+  }
+
+  const grid: (PlacedTetromino | null)[][] = Array.from({ length: DIGIT_ROWS }, () => Array(totalCols).fill(null));
+  const pieces: PlacedTetromino[] = [];
+  let combinedId = 0;
+
+  for (const part of parts) {
+    for (const original of part.result.pieces) {
+      const piece: PlacedTetromino = {
+        ...original,
+        id: `piece-${++combinedId}`,
+        anchor: { row: original.anchor.row, col: original.anchor.col + part.colOffset },
+        cells: original.cells.map((c) => ({ row: c.row, col: c.col + part.colOffset })),
+      };
+
+      pieces.push(piece);
+      for (const cell of piece.cells) {
+        grid[cell.row][cell.col] = piece;
+      }
+    }
+  }
+
+  // Ensure full coverage
+  for (let r = 0; r < DIGIT_ROWS; r++) {
+    for (let c = 0; c < totalCols; c++) {
+      if (grid[r][c] === null) {
+        return {
+          success: false,
+          pieces: [],
+          grid,
+          stats: {
+            attempts: parts.reduce((sum, p) => sum + p.result.stats.attempts, 0),
+            backtracks: parts.reduce((sum, p) => sum + p.result.stats.backtracks, 0),
+            duration: parts.reduce((sum, p) => sum + p.result.stats.duration, 0),
+          },
+        };
+      }
+    }
+  }
+
+  return {
+    success: true,
+    pieces,
+    grid,
+    stats: {
+      attempts: parts.reduce((sum, p) => sum + p.result.stats.attempts, 0),
+      backtracks: parts.reduce((sum, p) => sum + p.result.stats.backtracks, 0),
+      duration: parts.reduce((sum, p) => sum + p.result.stats.duration, 0),
+    },
+  };
 }

@@ -1,8 +1,11 @@
 import {
-  tileTime,
-  sequenceTime,
   DIGIT_ROWS,
   DIGIT_COLS,
+  TIME_COLS,
+  TIME_DIGIT_GAP_COLS,
+  TIME_COLON_GAP_COLS,
+  tileTimeGrid,
+  sequencePieces,
   type TileResult,
   type SequenceResult,
   type SequencedPiece,
@@ -28,24 +31,41 @@ const BACKGROUND_COLOR = "#1a3a5c"; // Dark blue
 const FIELD_TOP_PADDING_ROWS = 10;
 const FIELD_ROWS = DIGIT_ROWS + FIELD_TOP_PADDING_ROWS;
 
-// Animation timing
-const DROP_DURATION = 250; // ms per row
-const PIECE_DELAY = 350; // ms between pieces
-const ROTATE_DURATION = 240; // ms per rotation step
+// Unified display sizing
+const FIELD_COLS = TIME_COLS;
+const DIGIT_GAP_COLS = TIME_DIGIT_GAP_COLS;
+const COLON_GAP_COLS = TIME_COLON_GAP_COLS;
 
-// Hard drop + de-sync jitter
-const HARD_DROP_DURATION = 50; // ms per row once positioned
-const HARD_DROP_JITTER = 25; // +/- ms
-const DIGIT_START_JITTER_MAX = 300; // ms
-const PIECE_DELAY_JITTER = 400; // +/- ms
+// Animation speed
+// Increase to speed up everything (e.g. 2 = ~2x faster, 0.5 = ~2x slower).
+const SPEED = 10;
+
+const scaleMs = (baseMs: number): number => Math.max(0, Math.round(baseMs / SPEED));
+
+// Animation timing (base values at SPEED = 1)
+const BASE_DROP_DURATION = 250; // ms per row
+const BASE_PIECE_DELAY = 350; // ms between pieces
+const BASE_ROTATE_DURATION = 240; // ms per rotation step
+const BASE_HARD_DROP_DURATION = 50; // ms per row once positioned
+const BASE_HARD_DROP_JITTER = 25; // +/- ms
+const BASE_DIGIT_START_JITTER_MAX = 300; // ms
+const BASE_PIECE_DELAY_JITTER = 400; // +/- ms
+
+const DROP_DURATION = scaleMs(BASE_DROP_DURATION);
+const PIECE_DELAY = scaleMs(BASE_PIECE_DELAY);
+const ROTATE_DURATION = scaleMs(BASE_ROTATE_DURATION);
+const HARD_DROP_DURATION = scaleMs(BASE_HARD_DROP_DURATION);
+const HARD_DROP_JITTER = scaleMs(BASE_HARD_DROP_JITTER);
+const DIGIT_START_JITTER_MAX = scaleMs(BASE_DIGIT_START_JITTER_MAX);
+const PIECE_DELAY_JITTER = scaleMs(BASE_PIECE_DELAY_JITTER);
 
 class TetrisClock {
   private container: HTMLElement;
-  private digitGrids: HTMLElement[] = [];
+  private grid: HTMLElement | null = null;
   private colonElement: HTMLElement | null = null;
   private currentTime: { hours: number; minutes: number } | null = null;
   private isAnimating = false;
-  private lockedCellsByDigit: Set<string>[] = [];
+  private lockedCells: Set<string> = new Set();
 
   constructor(containerId: string) {
     const container = document.getElementById(containerId);
@@ -58,34 +78,29 @@ class TetrisClock {
     this.container.innerHTML = "";
     this.container.className = "clock-container";
 
-    // Create 4 digit grids with colon in the middle
-    for (let i = 0; i < 4; i++) {
-      const grid = this.createDigitGrid();
-      this.digitGrids.push(grid);
-      this.lockedCellsByDigit.push(new Set());
-      this.container.appendChild(grid);
+    // Single unified grid
+    this.grid = this.createGrid(FIELD_COLS);
+    this.container.appendChild(this.grid);
 
-      // Add colon after second digit
-      if (i === 1) {
-        this.colonElement = this.createColon();
-        this.container.appendChild(this.colonElement);
-      }
-    }
+    // Colon overlay (still visual-only)
+    this.colonElement = this.createColon();
+    this.container.appendChild(this.colonElement);
+    this.positionColon();
 
     // Start the clock
     this.updateTime();
     setInterval(() => this.updateTime(), 1000);
   }
 
-  private createDigitGrid(): HTMLElement {
+  private createGrid(cols: number): HTMLElement {
     const grid = document.createElement("div");
     grid.className = "digit-grid";
-    grid.style.gridTemplateColumns = `repeat(${DIGIT_COLS}, 1fr)`;
+    grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
     grid.style.gridTemplateRows = `repeat(${FIELD_ROWS}, 1fr)`;
 
     // Create empty cells
     for (let row = 0; row < FIELD_ROWS; row++) {
-      for (let col = 0; col < DIGIT_COLS; col++) {
+      for (let col = 0; col < cols; col++) {
         const cell = document.createElement("div");
         cell.className = "cell empty";
         cell.dataset.row = String(row);
@@ -104,17 +119,39 @@ class TetrisClock {
     return colon;
   }
 
-  private getCell(gridIndex: number, row: number, col: number): HTMLElement | null {
-    const grid = this.digitGrids[gridIndex];
-    if (!grid) return null;
-    return grid.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+  private positionColon() {
+    if (!this.colonElement) return;
+    // Place colon in the middle of the HH|MM gap.
+    // Layout: [d0][gap][d1][colonGap][d2][gap][d3]
+    const colonGapStartCol = DIGIT_COLS * 2 + DIGIT_GAP_COLS;
+    const colonCenterCol = colonGapStartCol + (COLON_GAP_COLS - 1) / 2;
+
+    // Keep these in sync with CSS in index.html
+    const CELL_PX = 24;
+    const GAP_PX = 2;
+    const PADDING_PX = 8;
+    const COLON_WIDTH_PX = 16;
+
+    // Align colon vertically with the digit area (not the padded spawn area).
+    // Digit rows occupy the bottom DIGIT_ROWS rows; padding is at the top.
+    const digitAreaCenterRow = FIELD_TOP_PADDING_ROWS + (DIGIT_ROWS - 1) / 2;
+    const y = PADDING_PX + digitAreaCenterRow * (CELL_PX + GAP_PX) + CELL_PX / 2;
+
+    const x = PADDING_PX + colonCenterCol * (CELL_PX + GAP_PX) + CELL_PX / 2 - COLON_WIDTH_PX / 2;
+    this.colonElement.style.left = `${x}px`;
+    this.colonElement.style.top = `${y}px`;
   }
 
-  private clearGrid(gridIndex: number) {
-    const grid = this.digitGrids[gridIndex];
+  private getCell(row: number, col: number): HTMLElement | null {
+    if (!this.grid) return null;
+    return this.grid.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+  }
+
+  private clearGrid() {
+    const grid = this.grid;
     if (!grid) return;
 
-    this.lockedCellsByDigit[gridIndex]?.clear();
+    this.lockedCells.clear();
 
     const cells = grid.querySelectorAll(".cell");
     cells.forEach((cell) => {
@@ -129,8 +166,8 @@ class TetrisClock {
     return `${row},${col}`;
   }
 
-  private setCellOccupied(gridIndex: number, row: number, col: number, pieceType: string, color: string) {
-    const cell = this.getCell(gridIndex, row, col);
+  private setCellOccupied(row: number, col: number, pieceType: string, color: string) {
+    const cell = this.getCell(row, col);
     if (!cell) return;
     cell.className = `cell ${pieceType}`;
     cell.style.backgroundColor = color;
@@ -138,10 +175,9 @@ class TetrisClock {
     cell.style.transform = "";
   }
 
-  private setCellEmptyIfUnlocked(gridIndex: number, row: number, col: number) {
-    const locked = this.lockedCellsByDigit[gridIndex];
-    if (locked?.has(this.cellKey(row, col))) return;
-    const cell = this.getCell(gridIndex, row, col);
+  private setCellEmptyIfUnlocked(row: number, col: number) {
+    if (this.lockedCells.has(this.cellKey(row, col))) return;
+    const cell = this.getCell(row, col);
     if (!cell) return;
     cell.className = "cell empty";
     cell.style.backgroundColor = "";
@@ -177,11 +213,11 @@ class TetrisClock {
     try {
       // Generate tile results
       const seed = Date.now();
-      const tileResults = tileTime(hours, minutes, { seed });
-      const sequenceResults = sequenceTime(tileResults);
+      const tileResult = tileTimeGrid(hours, minutes, { seed });
+      const sequenceResult = sequencePieces(tileResult);
 
-      // Animate each digit
-      await this.animateAllDigits(tileResults, sequenceResults);
+      // Animate one unified field
+      await this.animateField(tileResult, sequenceResult);
     } catch (error) {
       console.error("Error updating time:", error);
     } finally {
@@ -189,41 +225,25 @@ class TetrisClock {
     }
   }
 
-  private async animateAllDigits(tileResults: TileResult[], sequenceResults: SequenceResult[]) {
-    // Clear all grids first
-    for (let i = 0; i < 4; i++) {
-      this.clearGrid(i);
-    }
-
-    // Animate all digits in parallel
-    const animations = sequenceResults.map((seqResult, digitIndex) =>
-      this.animateDigit(digitIndex, seqResult, this.randInt(0, DIGIT_START_JITTER_MAX))
-    );
-
-    await Promise.all(animations);
-  }
-
-  private async animateDigit(gridIndex: number, seqResult: SequenceResult, startDelayMs = 0): Promise<void> {
+  private async animateField(_tileResult: TileResult, seqResult: SequenceResult): Promise<void> {
     if (!seqResult.success) return;
 
-    if (startDelayMs > 0) {
-      await this.delay(startDelayMs);
-    }
+    this.clearGrid();
+    await this.delay(this.randInt(0, DIGIT_START_JITTER_MAX));
 
     for (let i = 0; i < seqResult.sequence.length; i++) {
       const seqPiece = seqResult.sequence[i];
-      await this.animatePieceDrop(gridIndex, seqPiece);
+      await this.animatePieceDrop(seqPiece);
       await this.delay(this.jitter(PIECE_DELAY, PIECE_DELAY_JITTER));
     }
   }
 
-  private async animatePieceDrop(gridIndex: number, seqPiece: SequencedPiece): Promise<void> {
+  private async animatePieceDrop(seqPiece: SequencedPiece): Promise<void> {
     const piece = seqPiece.piece;
     // Digit pieces get colorful tetromino colors, background pieces get uniform dark blue
     const color = piece.isLit ? DIGIT_COLORS[piece.type] : BACKGROUND_COLOR;
 
     const tetromino = TETROMINOES[piece.type];
-    const locked = this.lockedCellsByDigit[gridIndex];
     let activeKeys = new Set<string>();
 
     const rotationCount = tetromino.rotations.length;
@@ -244,7 +264,7 @@ class TetrisClock {
     let currentRotation = startRotation;
 
     // Derive a reasonable step timing for non-drop actions.
-    const nudgeDuration = Math.max(40, Math.floor(DROP_DURATION / 3));
+    const nudgeDuration = Math.max(scaleMs(40), Math.floor(DROP_DURATION / 3));
     const rotateDuration = Math.max(ROTATE_DURATION, nudgeDuration);
 
     const renderAt = () => {
@@ -256,7 +276,7 @@ class TetrisClock {
         const visualCol = cell.col;
 
         if (visualRow < 0 || visualRow >= FIELD_ROWS) continue;
-        if (visualCol < 0 || visualCol >= DIGIT_COLS) continue;
+        if (visualCol < 0 || visualCol >= FIELD_COLS) continue;
 
         nextKeys.add(this.cellKey(visualRow, visualCol));
       }
@@ -266,7 +286,7 @@ class TetrisClock {
         if (nextKeys.has(key)) continue;
         const [r, c] = key.split(",").map(Number);
         if (Number.isFinite(r) && Number.isFinite(c)) {
-          this.setCellEmptyIfUnlocked(gridIndex, r, c);
+          this.setCellEmptyIfUnlocked(r, c);
         }
       }
 
@@ -275,7 +295,7 @@ class TetrisClock {
         if (activeKeys.has(key)) continue;
         const [r, c] = key.split(",").map(Number);
         if (Number.isFinite(r) && Number.isFinite(c)) {
-          this.setCellOccupied(gridIndex, r, c, piece.type, color);
+          this.setCellOccupied(r, c, piece.type, color);
         }
       }
 
@@ -327,7 +347,7 @@ class TetrisClock {
     currentAnchor = { row: piece.anchor.row, col: piece.anchor.col };
     renderAt();
     for (const key of activeKeys) {
-      locked?.add(key);
+      this.lockedCells.add(key);
     }
     activeKeys = new Set();
   }

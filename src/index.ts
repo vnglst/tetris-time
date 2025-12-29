@@ -14,16 +14,25 @@ export type {
   PlacementStep,
   SequencedPiece,
   SequenceResult,
-} from './types';
+} from "./types";
 
 // Tetromino definitions
-export { TETROMINOES, TETROMINO_TYPES, getAbsoluteCells } from './tetrominoes';
+export { TETROMINOES, TETROMINO_TYPES, getAbsoluteCells } from "./tetrominoes";
 
 // Digit patterns
-export { DIGIT_PATTERNS, DIGIT_ROWS, DIGIT_COLS, countLitCells, countUnlitCells } from './digits';
+export { DIGIT_PATTERNS, DIGIT_ROWS, DIGIT_COLS, countLitCells, countUnlitCells } from "./digits";
 
 // Solver API
-export { tileDigit, tileTime, tileGrid } from './solver';
+export {
+  tileDigit,
+  tileTime,
+  tileGrid,
+  tileTimeGrid,
+  TIME_ROWS,
+  TIME_COLS,
+  TIME_DIGIT_GAP_COLS,
+  TIME_COLON_GAP_COLS,
+} from "./solver";
 
 // Sequencer API
-export { sequencePieces, sequenceDigit, sequenceTime } from './sequencer';
+export { sequencePieces, sequenceDigit, sequenceTime } from "./sequencer";

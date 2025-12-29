@@ -1,10 +1,10 @@
-import { describe, it, expect } from 'vitest';
-import { sequencePieces, sequenceDigit, sequenceTime } from './sequencer';
-import { tileDigit, tileTime, tileGrid } from './solver';
-import { TileResult } from './types';
+import { describe, it, expect } from "vitest";
+import { sequencePieces, sequenceDigit, sequenceTime } from "./sequencer";
+import { tileDigit, tileTime, tileGrid, tileTimeGrid, TIME_ROWS, TIME_COLS } from "./solver";
+import { TileResult } from "./types";
 
-describe('sequencePieces', () => {
-  it('should sequence a simple 4x4 grid', () => {
+describe("sequencePieces", () => {
+  it("should sequence a simple 4x4 grid", () => {
     const mask = Array.from({ length: 4 }, () => Array(4).fill(true));
     const tileResult = tileGrid(4, 4, mask, { seed: 42 });
 
@@ -18,7 +18,7 @@ describe('sequencePieces', () => {
     expect(seqResult.cols).toBe(4);
   });
 
-  it('should assign correct order to pieces', () => {
+  it("should assign correct order to pieces", () => {
     const mask = Array.from({ length: 4 }, () => Array(4).fill(true));
     const tileResult = tileGrid(4, 4, mask, { seed: 42 });
     const seqResult = sequencePieces(tileResult);
@@ -30,7 +30,7 @@ describe('sequencePieces', () => {
     expect(orders).toEqual([0, 1, 2, 3]);
   });
 
-  it('should generate movement steps for each piece', () => {
+  it("should generate movement steps for each piece", () => {
     const mask = Array.from({ length: 4 }, () => Array(4).fill(true));
     const tileResult = tileGrid(4, 4, mask, { seed: 42 });
     const seqResult = sequencePieces(tileResult);
@@ -41,14 +41,14 @@ describe('sequencePieces', () => {
       expect(seq.steps.length).toBeGreaterThan(0);
 
       // First step should be spawn
-      expect(seq.steps[0].action).toBe('spawn');
+      expect(seq.steps[0].action).toBe("spawn");
 
       // Last step should be lock
-      expect(seq.steps[seq.steps.length - 1].action).toBe('lock');
+      expect(seq.steps[seq.steps.length - 1].action).toBe("lock");
     }
   });
 
-  it('should handle empty tile result', () => {
+  it("should handle empty tile result", () => {
     const emptyResult: TileResult = {
       success: false,
       pieces: [],
@@ -62,7 +62,7 @@ describe('sequencePieces', () => {
     expect(seqResult.sequence).toEqual([]);
   });
 
-  it('should produce valid drop order (pieces below placed first)', () => {
+  it("should produce valid drop order (pieces below placed first)", () => {
     const mask = Array.from({ length: 4 }, () => Array(4).fill(true));
     const tileResult = tileGrid(4, 4, mask, { seed: 42 });
     const seqResult = sequencePieces(tileResult);
@@ -91,8 +91,8 @@ describe('sequencePieces', () => {
   });
 });
 
-describe('sequenceDigit', () => {
-  it('should sequence digit 0', () => {
+describe("sequenceDigit", () => {
+  it("should sequence digit 0", () => {
     const tileResult = tileDigit(0, { seed: 42 });
     expect(tileResult.success).toBe(true);
 
@@ -104,7 +104,7 @@ describe('sequenceDigit', () => {
     expect(seqResult.cols).toBe(6);
   });
 
-  it('should sequence all digits 0-9', () => {
+  it("should sequence all digits 0-9", () => {
     for (let d = 0; d <= 9; d++) {
       const tileResult = tileDigit(d, { seed: 100 + d });
       expect(tileResult.success, `Digit ${d} tiling should succeed`).toBe(true);
@@ -115,25 +115,23 @@ describe('sequenceDigit', () => {
     }
   });
 
-  it('should include rotation steps when needed', () => {
+  it("should include rotation steps when needed", () => {
     const tileResult = tileDigit(5, { seed: 42 });
     const seqResult = sequenceDigit(tileResult);
 
     expect(seqResult.success).toBe(true);
 
     // At least some pieces should have non-zero rotation
-    const piecesWithRotation = seqResult.sequence.filter(
-      (s) => s.piece.rotationIndex > 0
-    );
+    const piecesWithRotation = seqResult.sequence.filter((s) => s.piece.rotationIndex > 0);
 
     // Check that rotated pieces have rotation steps
     for (const seqPiece of piecesWithRotation) {
-      const rotateSteps = seqPiece.steps.filter((s) => s.action === 'rotate');
+      const rotateSteps = seqPiece.steps.filter((s) => s.action === "rotate");
       expect(rotateSteps.length).toBe(seqPiece.piece.rotationIndex);
     }
   });
 
-  it('should include horizontal move steps', () => {
+  it("should include horizontal move steps", () => {
     const tileResult = tileDigit(1, { seed: 42 });
     const seqResult = sequenceDigit(tileResult);
 
@@ -141,8 +139,8 @@ describe('sequenceDigit', () => {
 
     // Check that pieces have move steps if their final column differs from spawn
     for (const seqPiece of seqResult.sequence) {
-      const moveSteps = seqPiece.steps.filter((s) => s.action === 'move');
-      const dropSteps = seqPiece.steps.filter((s) => s.action === 'drop');
+      const moveSteps = seqPiece.steps.filter((s) => s.action === "move");
+      const dropSteps = seqPiece.steps.filter((s) => s.action === "drop");
 
       // Every piece should have drop steps
       expect(dropSteps.length).toBeGreaterThan(0);
@@ -150,8 +148,8 @@ describe('sequenceDigit', () => {
   });
 });
 
-describe('sequenceTime', () => {
-  it('should sequence time 12:34', () => {
+describe("sequenceTime", () => {
+  it("should sequence time 12:34", () => {
     const tileResults = tileTime(12, 34, { seed: 42 });
     const seqResults = sequenceTime(tileResults);
 
@@ -163,7 +161,7 @@ describe('sequenceTime', () => {
     }
   });
 
-  it('should handle 00:00', () => {
+  it("should handle 00:00", () => {
     const tileResults = tileTime(0, 0, { seed: 42 });
     const seqResults = sequenceTime(tileResults);
 
@@ -171,7 +169,7 @@ describe('sequenceTime', () => {
     seqResults.forEach((r) => expect(r.success).toBe(true));
   });
 
-  it('should handle 23:59', () => {
+  it("should handle 23:59", () => {
     const tileResults = tileTime(23, 59, { seed: 42 });
     const seqResults = sequenceTime(tileResults);
 
@@ -180,8 +178,21 @@ describe('sequenceTime', () => {
   });
 });
 
-describe('Tetris mechanics', () => {
-  it('first piece in sequence should touch the grid bottom', () => {
+describe("sequencePieces (tileTimeGrid)", () => {
+  it("should sequence a unified time grid 12:34", () => {
+    const tileResult = tileTimeGrid(12, 34, { seed: 42 });
+    expect(tileResult.success).toBe(true);
+
+    const seqResult = sequencePieces(tileResult);
+    expect(seqResult.success).toBe(true);
+    expect(seqResult.rows).toBe(TIME_ROWS);
+    expect(seqResult.cols).toBe(TIME_COLS);
+    expect(seqResult.sequence.length).toBe(tileResult.pieces.length);
+  });
+});
+
+describe("Tetris mechanics", () => {
+  it("first piece in sequence should touch the grid bottom", () => {
     const mask = Array.from({ length: 4 }, () => Array(4).fill(true));
     const tileResult = tileGrid(4, 4, mask, { seed: 42 });
     const seqResult = sequencePieces(tileResult);
@@ -197,28 +208,23 @@ describe('Tetris mechanics', () => {
     expect(touchesBottom).toBe(true);
   });
 
-  it('first piece in sequence for a digit should touch the bottom', () => {
+  it("first piece in sequence for a digit should touch the bottom", () => {
     for (let d = 0; d <= 9; d++) {
       const tileResult = tileDigit(d, { seed: 100 + d });
       expect(tileResult.success, `Digit ${d} tiling should succeed`).toBe(true);
 
       const seqResult = sequencePieces(tileResult);
-      expect(seqResult.success, `Digit ${d} sequencing should succeed`).toBe(
-        true
-      );
+      expect(seqResult.success, `Digit ${d} sequencing should succeed`).toBe(true);
 
       const firstPiece = seqResult.sequence[0].piece;
       const maxRow = seqResult.rows - 1;
       const touchesBottom = firstPiece.cells.some((c) => c.row === maxRow);
 
-      expect(
-        touchesBottom,
-        `Digit ${d}: first piece should touch bottom (row ${maxRow})`
-      ).toBe(true);
+      expect(touchesBottom, `Digit ${d}: first piece should touch bottom (row ${maxRow})`).toBe(true);
     }
   });
 
-  it('no piece floats in mid-air - each piece is supported', () => {
+  it("no piece floats in mid-air - each piece is supported", () => {
     const tileResult = tileDigit(8, { seed: 42 });
     const seqResult = sequencePieces(tileResult);
 
@@ -250,18 +256,13 @@ describe('Tetris mechanics', () => {
         }
       }
 
-      const pieceIsSupported = [...columnLowestRows.entries()].every(
-        ([col, row]) => {
-          if (row === maxRow) return true; // At bottom
-          const cellBelowKey = `${row + 1},${col}`;
-          return placedCells.has(cellBelowKey);
-        }
-      );
+      const pieceIsSupported = [...columnLowestRows.entries()].every(([col, row]) => {
+        if (row === maxRow) return true; // At bottom
+        const cellBelowKey = `${row + 1},${col}`;
+        return placedCells.has(cellBelowKey);
+      });
 
-      expect(
-        pieceIsSupported,
-        `Piece ${seqPiece.piece.id} (${seqPiece.piece.type}) should be supported`
-      ).toBe(true);
+      expect(pieceIsSupported, `Piece ${seqPiece.piece.id} (${seqPiece.piece.type}) should be supported`).toBe(true);
 
       // Add this piece's cells to placed set
       for (const cell of seqPiece.piece.cells) {
@@ -270,7 +271,7 @@ describe('Tetris mechanics', () => {
     }
   });
 
-  it('pieces are ordered by gravity - lower pieces first', () => {
+  it("pieces are ordered by gravity - lower pieces first", () => {
     const tileResult = tileDigit(0, { seed: 42 });
     const seqResult = sequencePieces(tileResult);
 
@@ -292,18 +293,15 @@ describe('Tetris mechanics', () => {
         const cellBelow = tileResult.grid[cell.row + 1]?.[cell.col];
         if (cellBelow && cellBelow.id !== seqPiece.piece.id) {
           const belowIndex = pieceIndexMap.get(cellBelow.id)!;
-          expect(
-            belowIndex,
-            `Piece below ${seqPiece.piece.id} should come earlier in sequence`
-          ).toBeLessThan(myIndex);
+          expect(belowIndex, `Piece below ${seqPiece.piece.id} should come earlier in sequence`).toBeLessThan(myIndex);
         }
       }
     }
   });
 });
 
-describe('step generation', () => {
-  it('should generate spawn, optional rotate, optional move, drop, lock sequence', () => {
+describe("step generation", () => {
+  it("should generate spawn, optional rotate, optional move, drop, lock sequence", () => {
     const tileResult = tileDigit(8, { seed: 42 });
     const seqResult = sequenceDigit(tileResult);
 
@@ -313,10 +311,10 @@ describe('step generation', () => {
       const actions = seqPiece.steps.map((s) => s.action);
 
       // First action must be spawn
-      expect(actions[0]).toBe('spawn');
+      expect(actions[0]).toBe("spawn");
 
       // Last action must be lock
-      expect(actions[actions.length - 1]).toBe('lock');
+      expect(actions[actions.length - 1]).toBe("lock");
 
       // Actions before lock should be drop
       // (after spawn, rotate, move)
@@ -324,7 +322,7 @@ describe('step generation', () => {
       let dropStartIndex = -1;
 
       for (let i = 1; i < lockIndex; i++) {
-        if (actions[i] === 'drop') {
+        if (actions[i] === "drop") {
           dropStartIndex = i;
           break;
         }
@@ -333,20 +331,20 @@ describe('step generation', () => {
       // All actions after dropStartIndex (before lock) should be drop
       if (dropStartIndex !== -1) {
         for (let i = dropStartIndex; i < lockIndex; i++) {
-          expect(actions[i]).toBe('drop');
+          expect(actions[i]).toBe("drop");
         }
       }
     }
   });
 
-  it('should have drop steps that decrease row by 1 each time', () => {
+  it("should have drop steps that decrease row by 1 each time", () => {
     const tileResult = tileDigit(3, { seed: 42 });
     const seqResult = sequenceDigit(tileResult);
 
     expect(seqResult.success).toBe(true);
 
     for (const seqPiece of seqResult.sequence) {
-      const dropSteps = seqPiece.steps.filter((s) => s.action === 'drop');
+      const dropSteps = seqPiece.steps.filter((s) => s.action === "drop");
 
       // Each consecutive drop should increase row by 1
       for (let i = 1; i < dropSteps.length; i++) {
