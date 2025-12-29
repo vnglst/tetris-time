@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="4" fill="#16213e"/>
+  <!-- T-Tetromino -->
+  <rect x="4" y="8" width="7" height="7" rx="1" fill="#c48efd"/>
+  <rect x="12.5" y="8" width="7" height="7" rx="1" fill="#c48efd"/>
+  <rect x="21" y="8" width="7" height="7" rx="1" fill="#c48efd"/>
+  <rect x="12.5" y="17" width="7" height="7" rx="1" fill="#c48efd"/>
+</svg>
