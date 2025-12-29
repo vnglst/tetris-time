@@ -6,6 +6,14 @@ import { DIGIT_PATTERNS, DIGIT_ROWS, DIGIT_COLS } from './digits';
 /** Default maximum attempts before giving up */
 const DEFAULT_MAX_ATTEMPTS = 1_000_000;
 
+function nowMs(): number {
+  const perf = (globalThis as any)?.performance;
+  if (perf && typeof perf.now === 'function') {
+    return perf.now();
+  }
+  return Date.now();
+}
+
 /**
  * Simple seeded random number generator (Mulberry32)
  */
@@ -162,7 +170,7 @@ export function tileGrid(
   mask: DigitMask,
   options?: TileOptions
 ): TileResult {
-  const startTime = performance.now();
+  const startTime = nowMs();
   const seed = seedToNumber(options?.seed);
   const maxAttempts = options?.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
 
@@ -184,7 +192,7 @@ export function tileGrid(
   const stats: TileStats = {
     attempts: state.attempts,
     backtracks: state.backtracks,
-    duration: performance.now() - startTime,
+    duration: nowMs() - startTime,
   };
 
   return {
