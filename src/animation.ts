@@ -8,11 +8,14 @@ export interface AnimationEstimateConfig {
   /** Gravity interval: ms per row drop (now used for continuous gravity) */
   hardDropDurationMs: number;
   pieceDelayMs: number;
+  /** Pause before actions start (human-like "thinking" delay) */
+  thinkDurationMs?: number;
 }
 
 export function estimateAnimationDurationMs(seqResult: SequenceResult, config: AnimationEstimateConfig): number {
   if (!seqResult.success) return 0;
 
+  const thinkDuration = config.thinkDurationMs ?? 0;
   let total = 0;
 
   for (const seqPiece of seqResult.sequence) {
@@ -21,18 +24,16 @@ export function estimateAnimationDurationMs(seqResult: SequenceResult, config: A
     const targetRotation = ((piece.rotationIndex % rotationCount) + rotationCount) % rotationCount;
     const rotateSteps = rotationCount <= 1 ? 0 : targetRotation;
     const moveSteps = seqPiece.steps.filter((s) => s.action === "move").length;
-
-    // UI drops from row = -fieldTopPaddingRows to piece.anchor.row
-    const rowsDropped = Math.max(0, piece.anchor.row + config.fieldTopPaddingRows);
-
-    // With time-based gravity, actions (rotate/move) happen in parallel with falling.
-    // The piece animation time is the MAX of gravity time vs action time.
-    const gravityTime = rowsDropped * config.hardDropDurationMs;
     const totalActions = rotateSteps + moveSteps;
-    const actionTime = totalActions * config.nudgeDurationMs;
 
-    // Piece takes whichever is longer: falling or completing all actions
-    total += Math.max(gravityTime, actionTime);
+    // The actual animation behavior:
+    // 1. thinkDuration pause before actions start
+    // 2. Actions (rotate/move) execute at nudgeDuration intervals
+    // 3. Once all actions complete, piece hard-drops instantly to final position
+    // So piece time = thinkDuration + totalActions * nudgeDuration
+    const actionTime = thinkDuration + totalActions * config.nudgeDurationMs;
+
+    total += actionTime;
 
     // animateField adds a delay after every piece (including the last)
     total += config.pieceDelayMs;

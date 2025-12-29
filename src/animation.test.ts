@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { tileTimeGrid, tileDigit } from "./solver";
 import { sequencePieces } from "./sequencer";
 import { estimateAnimationDurationMs } from "./animation";
+import { TETROMINOES } from "./tetrominoes";
 
 describe("estimateAnimationDurationMs", () => {
   it("returns 0 for unsuccessful sequences", () => {
@@ -44,7 +45,9 @@ describe("estimateAnimationDurationMs", () => {
     expect(withDelay - base).toBe(delta * seq.sequence.length);
   });
 
-  it("scales linearly with hardDropDurationMs", () => {
+  it("hardDropDurationMs is unused (pieces hard-drop instantly after actions)", () => {
+    // The actual animation hard-drops pieces instantly once all actions complete,
+    // so hardDropDurationMs (gravity interval) has no effect on the estimate.
     const tile = tileDigit(8, { seed: 123 });
     expect(tile.success).toBe(true);
     const seq = sequencePieces(tile);
@@ -52,22 +55,69 @@ describe("estimateAnimationDurationMs", () => {
 
     const configA = {
       fieldTopPaddingRows: 10,
-      nudgeDurationMs: 0, // Zero so gravityTime always dominates actionTime
+      nudgeDurationMs: 50,
       rotateDurationMs: 30,
       hardDropDurationMs: 4,
-      pieceDelayMs: 0,
+      pieceDelayMs: 100,
+      thinkDurationMs: 0,
     };
-    const configB = { ...configA, hardDropDurationMs: 9 };
+    const configB = { ...configA, hardDropDurationMs: 500 }; // 125x difference
 
     const a = estimateAnimationDurationMs(seq, configA);
     const b = estimateAnimationDurationMs(seq, configB);
 
-    // Each piece drops (anchor.row + padding) rows.
-    const totalRowsDropped = seq.sequence.reduce(
-      (sum, s) => sum + Math.max(0, s.piece.anchor.row + configA.fieldTopPaddingRows),
-      0
-    );
+    // Changing hardDropDurationMs should have no effect
+    expect(a).toBe(b);
+  });
 
-    expect(b - a).toBe((configB.hardDropDurationMs - configA.hardDropDurationMs) * totalRowsDropped);
+  it("should match actual animation behavior with hard drop", () => {
+    // This test demonstrates the current bug: the estimate doesn't account for
+    // the fact that pieces hard-drop instantly once all actions are complete.
+    const tile = tileTimeGrid(12, 34, { seed: 42 });
+    const seq = sequencePieces(tile);
+    expect(seq.success).toBe(true);
+
+    const FIELD_TOP_PADDING_ROWS = 10;
+    const DROP_DURATION = 500; // gravity interval
+    const PIECE_DELAY = 600;
+    const THINK_DURATION = 300; // pause before actions start
+    const nudgeDuration = Math.max(40, Math.floor(DROP_DURATION / 3)); // 166ms
+
+    // Calculate what the actual animation does:
+    // 1. THINK_DURATION pause before actions
+    // 2. Actions (rotations + moves) at nudgeDuration intervals
+    // 3. Hard drop (instant, just a few frames) once actions complete
+    // 4. PIECE_DELAY between pieces
+    let actualBehaviorMs = 0;
+    for (const seqPiece of seq.sequence) {
+      const piece = seqPiece.piece;
+      const rotationCount = TETROMINOES[piece.type].rotations.length;
+      const targetRotation = ((piece.rotationIndex % rotationCount) + rotationCount) % rotationCount;
+      const rotateSteps = rotationCount <= 1 ? 0 : targetRotation;
+      const moveSteps = seqPiece.steps.filter((s) => s.action === "move").length;
+      const totalActions = rotateSteps + moveSteps;
+
+      // Actual: THINK_DURATION + actions, then instant hard drop
+      actualBehaviorMs += THINK_DURATION + totalActions * nudgeDuration;
+      actualBehaviorMs += PIECE_DELAY;
+    }
+
+    // Current estimate (now with thinkDurationMs)
+    const currentEstimate = estimateAnimationDurationMs(seq, {
+      fieldTopPaddingRows: FIELD_TOP_PADDING_ROWS,
+      nudgeDurationMs: nudgeDuration,
+      rotateDurationMs: 400,
+      hardDropDurationMs: DROP_DURATION,
+      pieceDelayMs: PIECE_DELAY,
+      thinkDurationMs: THINK_DURATION,
+    });
+
+    console.log(`Pieces: ${seq.sequence.length}`);
+    console.log(`Current estimate: ${currentEstimate}ms`);
+    console.log(`Actual behavior: ${actualBehaviorMs}ms`);
+    console.log(`Difference: ${currentEstimate - actualBehaviorMs}ms`);
+
+    // Estimate should now match actual behavior
+    expect(currentEstimate).toBe(actualBehaviorMs);
   });
 });

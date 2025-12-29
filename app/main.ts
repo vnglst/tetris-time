@@ -41,7 +41,7 @@ const COLON_GAP_COLS = TIME_COLON_GAP_COLS;
 
 // Animation speed
 // Increase to speed up everything (e.g. 2 = ~2x faster, 0.5 = ~2x slower).
-const SPEED = 1;
+const SPEED = 10;
 
 const MIN_ANIM_STEP_MS = 16;
 const scaleMs = (baseMs: number, minMs = 0): number => Math.max(minMs, Math.round(baseMs / SPEED));
@@ -223,8 +223,9 @@ class TetrisClock {
         fieldTopPaddingRows: FIELD_TOP_PADDING_ROWS,
         nudgeDurationMs: nudgeDuration,
         rotateDurationMs: rotateDuration,
-        hardDropDurationMs: DROP_DURATION, // gravity interval for continuous falling
+        hardDropDurationMs: DROP_DURATION,
         pieceDelayMs: PIECE_DELAY,
+        thinkDurationMs: THINK_DURATION,
       });
 
       const nextTarget = new Date(baseTime.getTime() + estimatedMs);
