@@ -5,6 +5,7 @@ export interface AnimationEstimateConfig {
   fieldTopPaddingRows: number;
   nudgeDurationMs: number;
   rotateDurationMs: number;
+  /** Gravity interval: ms per row drop (now used for continuous gravity) */
   hardDropDurationMs: number;
   pieceDelayMs: number;
 }
@@ -24,10 +25,14 @@ export function estimateAnimationDurationMs(seqResult: SequenceResult, config: A
     // UI drops from row = -fieldTopPaddingRows to piece.anchor.row
     const rowsDropped = Math.max(0, piece.anchor.row + config.fieldTopPaddingRows);
 
-    total += config.nudgeDurationMs; // after spawn
-    total += rotateSteps * config.rotateDurationMs;
-    total += moveSteps * config.nudgeDurationMs;
-    total += rowsDropped * config.hardDropDurationMs;
+    // With time-based gravity, actions (rotate/move) happen in parallel with falling.
+    // The piece animation time is the MAX of gravity time vs action time.
+    const gravityTime = rowsDropped * config.hardDropDurationMs;
+    const totalActions = rotateSteps + moveSteps;
+    const actionTime = totalActions * config.nudgeDurationMs;
+
+    // Piece takes whichever is longer: falling or completing all actions
+    total += Math.max(gravityTime, actionTime);
 
     // animateField adds a delay after every piece (including the last)
     total += config.pieceDelayMs;

@@ -15,6 +15,8 @@ import {
 import { estimateAnimationDurationMs } from "../src/animation";
 
 // Color mapping for digit tetrominos (lit cells)
+// Colors from the Mindful Palette by Alex Cristache
+// https://x.com/AlexCristache/status/2004124900748116212
 const DIGIT_COLORS: Record<string, string> = {
   I: "#77AAFF", // Fennel Flower
   O: "#FED340", // Daisy
@@ -45,15 +47,13 @@ const MIN_ANIM_STEP_MS = 16;
 const scaleMs = (baseMs: number, minMs = 0): number => Math.max(minMs, Math.round(baseMs / SPEED));
 
 // Animation timing (base values at SPEED = 1)
-const BASE_DROP_DURATION = 250; // ms per row
+const BASE_DROP_DURATION = 250; // ms per row (gravity interval)
 const BASE_PIECE_DELAY = 350; // ms between pieces
 const BASE_ROTATE_DURATION = 240; // ms per rotation step
-const BASE_HARD_DROP_DURATION = 50; // ms per row once positioned
 
 const DROP_DURATION = scaleMs(BASE_DROP_DURATION, MIN_ANIM_STEP_MS);
 const PIECE_DELAY = scaleMs(BASE_PIECE_DELAY, 0);
 const ROTATE_DURATION = scaleMs(BASE_ROTATE_DURATION, MIN_ANIM_STEP_MS);
-const HARD_DROP_DURATION = scaleMs(BASE_HARD_DROP_DURATION, MIN_ANIM_STEP_MS);
 
 class TetrisClock {
   private container: HTMLElement;
@@ -215,7 +215,7 @@ class TetrisClock {
         fieldTopPaddingRows: FIELD_TOP_PADDING_ROWS,
         nudgeDurationMs: nudgeDuration,
         rotateDurationMs: rotateDuration,
-        hardDropDurationMs: HARD_DROP_DURATION,
+        hardDropDurationMs: DROP_DURATION, // gravity interval for continuous falling
         pieceDelayMs: PIECE_DELAY,
       });
 
@@ -289,9 +289,10 @@ class TetrisClock {
     let currentAnchor = { row: piece.anchor.row, col: piece.anchor.col };
     let currentRotation = startRotation;
 
-    // Derive a reasonable step timing for non-drop actions.
-    const nudgeDuration = Math.max(scaleMs(40), Math.floor(DROP_DURATION / 3));
-    const rotateDuration = Math.max(ROTATE_DURATION, nudgeDuration);
+    // Timing for actions (rotation/movement happen faster than gravity)
+    const actionDuration = Math.max(scaleMs(40), Math.floor(DROP_DURATION / 3));
+    // Gravity: piece falls 1 row per DROP_DURATION ms
+    const gravityInterval = DROP_DURATION;
 
     const renderAt = () => {
       const nextKeys = new Set<string>();
@@ -331,6 +332,23 @@ class TetrisClock {
     const spawnStep = seqPiece.steps.find((s) => s.action === "spawn");
     const moveSteps = seqPiece.steps.filter((s) => s.action === "move");
 
+    // Build action queue: rotations first, then horizontal moves
+    type Action = { type: "rotate" } | { type: "move"; col: number };
+    const actions: Action[] = [];
+
+    // Queue rotation actions
+    const rotationsNeeded = targetRotation; // startRotation is 0
+    for (let i = 0; i < rotationsNeeded; i++) {
+      actions.push({ type: "rotate" });
+    }
+
+    // Queue move actions
+    for (const step of moveSteps) {
+      if (step.col !== undefined) {
+        actions.push({ type: "move", col: step.col });
+      }
+    }
+
     // Spawn at the TOP of the visual playfield.
     // Solver coordinates map to the bottom area via FIELD_TOP_PADDING_ROWS, so using
     // row = -FIELD_TOP_PADDING_ROWS makes the piece visible at visual row 0.
@@ -340,44 +358,46 @@ class TetrisClock {
     };
     currentRotation = startRotation;
     renderAt();
-    await this.delay(nudgeDuration);
 
-    // Rotate into the final orientation right after spawn.
-    while (currentRotation !== targetRotation) {
-      currentRotation = (currentRotation + 1) % rotationCount;
-      renderAt();
-      await this.delay(rotateDuration);
-    }
+    // Time-based animation loop: gravity runs continuously while actions execute
+    let lastGravityTime = performance.now();
+    let lastActionTime = performance.now();
+    let actionIndex = 0;
+    const frameDelay = 16; // ~60fps
 
-    // Horizontal moves (use sequencer path, but keep row fixed while moving).
-    for (const step of moveSteps) {
-      currentAnchor = {
-        row: currentAnchor.row,
-        col: step.col ?? currentAnchor.col,
-      };
-      renderAt();
-      await this.delay(nudgeDuration);
+    // Continue until piece reaches final row AND all actions are complete
+    while (currentAnchor.row < piece.anchor.row || actionIndex < actions.length) {
+      const now = performance.now();
+      let stateChanged = false;
 
-      // Let the piece fall a bit while moving sideways (more like real Tetris).
-      // Keep it deterministic and never drop past the final anchor row.
-      if (currentAnchor.row < piece.anchor.row) {
+      // Apply gravity if enough time has passed and we haven't reached final row
+      if (now - lastGravityTime >= gravityInterval && currentAnchor.row < piece.anchor.row) {
         currentAnchor = { row: currentAnchor.row + 1, col: currentAnchor.col };
-        renderAt();
-        await this.delay(HARD_DROP_DURATION);
+        lastGravityTime = now;
+        stateChanged = true;
       }
+
+      // Execute next action if enough time has passed
+      if (actionIndex < actions.length && now - lastActionTime >= actionDuration) {
+        const action = actions[actionIndex];
+        if (action.type === "rotate") {
+          currentRotation = (currentRotation + 1) % rotationCount;
+        } else if (action.type === "move") {
+          currentAnchor = { ...currentAnchor, col: action.col };
+        }
+        actionIndex++;
+        lastActionTime = now;
+        stateChanged = true;
+      }
+
+      if (stateChanged) {
+        renderAt();
+      }
+
+      await this.delay(frameDelay);
     }
 
-    // Once correctly positioned (rotation + column), do a faster drop.
-    const hardDropDuration = HARD_DROP_DURATION;
-
-    // Drop row-by-row from spawn row all the way to the final solver anchor row.
-    for (let r = currentAnchor.row + 1; r <= piece.anchor.row; r++) {
-      currentAnchor = { row: r, col: piece.anchor.col };
-      renderAt();
-      await this.delay(hardDropDuration);
-    }
-
-    // Lock
+    // Lock at final position
     currentAnchor = { row: piece.anchor.row, col: piece.anchor.col };
     renderAt();
     for (const key of activeKeys) {
