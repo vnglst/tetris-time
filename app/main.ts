@@ -47,9 +47,9 @@ const MIN_ANIM_STEP_MS = 16;
 const scaleMs = (baseMs: number, minMs = 0): number => Math.max(minMs, Math.round(baseMs / SPEED));
 
 // Animation timing (base values at SPEED = 1)
-const BASE_DROP_DURATION = 250; // ms per row (gravity interval)
-const BASE_PIECE_DELAY = 350; // ms between pieces
-const BASE_ROTATE_DURATION = 240; // ms per rotation step
+const BASE_DROP_DURATION = 500; // ms per row (gravity interval)
+const BASE_PIECE_DELAY = 600; // ms between pieces
+const BASE_ROTATE_DURATION = 400; // ms per rotation step
 
 const DROP_DURATION = scaleMs(BASE_DROP_DURATION, MIN_ANIM_STEP_MS);
 const PIECE_DELAY = scaleMs(BASE_PIECE_DELAY, 0);
@@ -392,6 +392,21 @@ class TetrisClock {
 
       if (stateChanged) {
         renderAt();
+      }
+
+      // Hard drop: if piece is correctly positioned and rotated, drop immediately
+      if (
+        actionIndex >= actions.length &&
+        currentAnchor.col === piece.anchor.col &&
+        currentRotation === targetRotation
+      ) {
+        // Animate quick drop to final position
+        while (currentAnchor.row < piece.anchor.row) {
+          currentAnchor = { row: currentAnchor.row + 1, col: currentAnchor.col };
+          renderAt();
+          await this.delay(frameDelay);
+        }
+        break;
       }
 
       await this.delay(frameDelay);
