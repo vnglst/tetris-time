@@ -11,13 +11,37 @@
         box-sizing: border-box;
       }
 
+      html {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+        background-attachment: fixed;
+      }
+
       body {
         min-height: 100vh;
         display: flex;
+        flex-direction: column;
         justify-content: center;
         align-items: center;
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+
+      #made {
+        position: absolute;
+        top: 100vh;
+        left: 0;
+        right: 0;
+        padding: 40px 0;
+        text-align: center;
+        line-height: 1.8;
+        font-family: monospace;
+        font-size: 10px;
+        color: rgb(220, 220, 220);
+      }
+
+      #made a {
+        color: white;
+        text-decoration: none;
+        border-bottom: 1px solid white;
       }
 
       .clock-container {
@@ -109,6 +133,10 @@
   </head>
   <body>
     <div id="app" class="loading">Loading...</div>
+    <div id="made">
+      made by <a href="https://koenvangilst.nl">Koen van Gilst</a><br />
+      source on <a href="https://github.com/vnglst/tetris-time">github</a>
+    </div>
     <script type="module" src="/app/main.ts"></script>
   </body>
 </html>
