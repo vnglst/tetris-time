@@ -24,6 +24,13 @@ npm run test:watch # Run tests in watch mode
 npm run typecheck # TypeScript type checking
 ```
 
+### Delivering Features
+
+Before completing any feature or bug fix, always run:
+
+1. `npm test` - All tests must pass
+2. `npm run typecheck` - No type errors allowed
+
 ## Architecture
 
 ### Core Library (`src/`)
