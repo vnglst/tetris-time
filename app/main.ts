@@ -33,6 +33,12 @@ const DROP_DURATION = 250; // ms per row
 const PIECE_DELAY = 350; // ms between pieces
 const ROTATE_DURATION = 240; // ms per rotation step
 
+// Hard drop + de-sync jitter
+const HARD_DROP_DURATION = 70; // ms per row once positioned
+const HARD_DROP_JITTER = 25; // +/- ms
+const DIGIT_START_JITTER_MAX = 500; // ms
+const PIECE_DELAY_JITTER = 200; // +/- ms
+
 class TetrisClock {
   private container: HTMLElement;
   private digitGrids: HTMLElement[] = [];
@@ -143,6 +149,16 @@ class TetrisClock {
     cell.style.transform = "";
   }
 
+  private randInt(min: number, max: number): number {
+    const lo = Math.ceil(Math.min(min, max));
+    const hi = Math.floor(Math.max(min, max));
+    return Math.floor(Math.random() * (hi - lo + 1)) + lo;
+  }
+
+  private jitter(base: number, plusMinus: number): number {
+    return Math.max(0, base + this.randInt(-plusMinus, plusMinus));
+  }
+
   private async updateTime() {
     const now = new Date();
     const hours = now.getHours();
@@ -180,18 +196,24 @@ class TetrisClock {
     }
 
     // Animate all digits in parallel
-    const animations = sequenceResults.map((seqResult, digitIndex) => this.animateDigit(digitIndex, seqResult));
+    const animations = sequenceResults.map((seqResult, digitIndex) =>
+      this.animateDigit(digitIndex, seqResult, this.randInt(0, DIGIT_START_JITTER_MAX))
+    );
 
     await Promise.all(animations);
   }
 
-  private async animateDigit(gridIndex: number, seqResult: SequenceResult): Promise<void> {
+  private async animateDigit(gridIndex: number, seqResult: SequenceResult, startDelayMs = 0): Promise<void> {
     if (!seqResult.success) return;
+
+    if (startDelayMs > 0) {
+      await this.delay(startDelayMs);
+    }
 
     for (let i = 0; i < seqResult.sequence.length; i++) {
       const seqPiece = seqResult.sequence[i];
       await this.animatePieceDrop(gridIndex, seqPiece);
-      await this.delay(PIECE_DELAY);
+      await this.delay(this.jitter(PIECE_DELAY, PIECE_DELAY_JITTER));
     }
   }
 
@@ -280,11 +302,14 @@ class TetrisClock {
       await this.delay(nudgeDuration);
     }
 
+    // Once correctly positioned (rotation + column), do a faster drop.
+    const hardDropDuration = this.jitter(HARD_DROP_DURATION, HARD_DROP_JITTER);
+
     // Drop row-by-row from spawn row all the way to the final solver anchor row.
     for (let r = currentAnchor.row + 1; r <= piece.anchor.row; r++) {
       currentAnchor = { row: r, col: piece.anchor.col };
       renderAt();
-      await this.delay(DROP_DURATION);
+      await this.delay(hardDropDuration);
     }
 
     // Lock
