@@ -41,7 +41,7 @@ const COLON_GAP_COLS = TIME_COLON_GAP_COLS;
 
 // Animation speed
 // Increase to speed up everything (e.g. 2 = ~2x faster, 0.5 = ~2x slower).
-const SPEED = 5;
+const SPEED = 1;
 
 const MIN_ANIM_STEP_MS = 16;
 const scaleMs = (baseMs: number, minMs = 0): number => Math.max(minMs, Math.round(baseMs / SPEED));
