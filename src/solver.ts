@@ -1,18 +1,10 @@
-import type { TileResult, TileStats, TileOptions, DigitMask, PlacedTetromino } from './types';
-import { Grid, resetPieceIdCounter } from './grid';
-import { TETROMINOES, TETROMINO_TYPES } from './tetrominoes';
-import { DIGIT_PATTERNS, DIGIT_ROWS, DIGIT_COLS } from './digits';
+import type { TileResult, TileStats, TileOptions, DigitMask, PlacedTetromino } from "./types";
+import { Grid, resetPieceIdCounter } from "./grid";
+import { TETROMINOES, TETROMINO_TYPES } from "./tetrominoes";
+import { DIGIT_PATTERNS, DIGIT_ROWS, DIGIT_COLS } from "./digits";
 
 /** Default maximum attempts before giving up */
 const DEFAULT_MAX_ATTEMPTS = 1_000_000;
-
-function nowMs(): number {
-  const perf = (globalThis as any)?.performance;
-  if (perf && typeof perf.now === 'function') {
-    return perf.now();
-  }
-  return Date.now();
-}
 
 /**
  * Simple seeded random number generator (Mulberry32)
@@ -48,7 +40,7 @@ function seedToNumber(seed: number | string | undefined): number {
   if (seed === undefined) {
     return Date.now();
   }
-  if (typeof seed === 'number') {
+  if (typeof seed === "number") {
     return seed;
   }
   // Hash string to number
@@ -110,12 +102,7 @@ function getAnchorsToCoverCell(
 /**
  * Backtracking solver for tiling a grid with tetrominoes.
  */
-function backtrack(
-  grid: Grid,
-  placements: Placement[],
-  random: SeededRandom,
-  state: SolverState
-): boolean {
+function backtrack(grid: Grid, placements: Placement[], random: SeededRandom, state: SolverState): boolean {
   // Base case: grid is full
   if (grid.isFull()) {
     return true;
@@ -164,13 +151,8 @@ function backtrack(
 /**
  * Tile a grid with the given mask.
  */
-export function tileGrid(
-  rows: number,
-  cols: number,
-  mask: DigitMask,
-  options?: TileOptions
-): TileResult {
-  const startTime = nowMs();
+export function tileGrid(rows: number, cols: number, mask: DigitMask, options?: TileOptions): TileResult {
+  const startTime = performance.now();
   const seed = seedToNumber(options?.seed);
   const maxAttempts = options?.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
 
@@ -192,7 +174,7 @@ export function tileGrid(
   const stats: TileStats = {
     attempts: state.attempts,
     backtracks: state.backtracks,
-    duration: nowMs() - startTime,
+    duration: performance.now() - startTime,
   };
 
   return {
@@ -219,11 +201,7 @@ export function tileDigit(digit: number, options?: TileOptions): TileResult {
  * Tile a full time display (HH:MM).
  * Returns an array of 4 TileResults, one for each digit.
  */
-export function tileTime(
-  hours: number,
-  minutes: number,
-  options?: TileOptions
-): TileResult[] {
+export function tileTime(hours: number, minutes: number, options?: TileOptions): TileResult[] {
   if (hours < 0 || hours > 23 || !Number.isInteger(hours)) {
     throw new Error(`Invalid hours: ${hours}. Must be an integer 0-23.`);
   }
