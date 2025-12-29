@@ -12,6 +12,7 @@ import {
   TETROMINOES,
   getAbsoluteCells,
 } from "../src/index";
+import { estimateAnimationDurationMs } from "../src/animation";
 
 // Color mapping for digit tetrominos (lit cells)
 const DIGIT_COLORS: Record<string, string> = {
@@ -38,26 +39,21 @@ const COLON_GAP_COLS = TIME_COLON_GAP_COLS;
 
 // Animation speed
 // Increase to speed up everything (e.g. 2 = ~2x faster, 0.5 = ~2x slower).
-const SPEED = 10;
+const SPEED = 1;
 
-const scaleMs = (baseMs: number): number => Math.max(0, Math.round(baseMs / SPEED));
+const MIN_ANIM_STEP_MS = 16;
+const scaleMs = (baseMs: number, minMs = 0): number => Math.max(minMs, Math.round(baseMs / SPEED));
 
 // Animation timing (base values at SPEED = 1)
 const BASE_DROP_DURATION = 250; // ms per row
 const BASE_PIECE_DELAY = 350; // ms between pieces
 const BASE_ROTATE_DURATION = 240; // ms per rotation step
 const BASE_HARD_DROP_DURATION = 50; // ms per row once positioned
-const BASE_HARD_DROP_JITTER = 25; // +/- ms
-const BASE_DIGIT_START_JITTER_MAX = 300; // ms
-const BASE_PIECE_DELAY_JITTER = 400; // +/- ms
 
-const DROP_DURATION = scaleMs(BASE_DROP_DURATION);
-const PIECE_DELAY = scaleMs(BASE_PIECE_DELAY);
-const ROTATE_DURATION = scaleMs(BASE_ROTATE_DURATION);
-const HARD_DROP_DURATION = scaleMs(BASE_HARD_DROP_DURATION);
-const HARD_DROP_JITTER = scaleMs(BASE_HARD_DROP_JITTER);
-const DIGIT_START_JITTER_MAX = scaleMs(BASE_DIGIT_START_JITTER_MAX);
-const PIECE_DELAY_JITTER = scaleMs(BASE_PIECE_DELAY_JITTER);
+const DROP_DURATION = scaleMs(BASE_DROP_DURATION, MIN_ANIM_STEP_MS);
+const PIECE_DELAY = scaleMs(BASE_PIECE_DELAY, 0);
+const ROTATE_DURATION = scaleMs(BASE_ROTATE_DURATION, MIN_ANIM_STEP_MS);
+const HARD_DROP_DURATION = scaleMs(BASE_HARD_DROP_DURATION, MIN_ANIM_STEP_MS);
 
 class TetrisClock {
   private container: HTMLElement;
@@ -185,35 +181,74 @@ class TetrisClock {
     cell.style.transform = "";
   }
 
-  private randInt(min: number, max: number): number {
-    const lo = Math.ceil(Math.min(min, max));
-    const hi = Math.floor(Math.max(min, max));
-    return Math.floor(Math.random() * (hi - lo + 1)) + lo;
+  private formatHHMM(hours: number, minutes: number): string {
+    const hh = String(hours).padStart(2, "0");
+    const mm = String(minutes).padStart(2, "0");
+    return `${hh}:${mm}`;
   }
 
-  private jitter(base: number, plusMinus: number): number {
-    return Math.max(0, base + this.randInt(-plusMinus, plusMinus));
+  private floorToMinute(date: Date): Date {
+    const d = new Date(date);
+    d.setSeconds(0, 0);
+    return d;
   }
 
   private async updateTime() {
-    const now = new Date();
-    const hours = now.getHours();
-    const minutes = now.getMinutes();
+    if (this.isAnimating) return;
 
-    // Skip if time hasn't changed or already animating
-    if (this.currentTime?.hours === hours && this.currentTime?.minutes === minutes) {
+    // Stabilize predictions within a minute so we don't re-render every second.
+    const baseTime = this.floorToMinute(new Date());
+    const seed = baseTime.getTime();
+
+    // Fixed-point iteration: target minute depends on the duration of animating that target.
+    // This is especially important at slow speeds where animations span multiple minutes.
+    let targetDate = new Date(baseTime);
+    let estimatedMs = 0;
+    for (let i = 0; i < 3; i++) {
+      const h = targetDate.getHours();
+      const m = targetDate.getMinutes();
+      const previewTile = tileTimeGrid(h, m, { seed });
+      const previewSeq = sequencePieces(previewTile);
+      const nudgeDuration = Math.max(scaleMs(40, MIN_ANIM_STEP_MS), Math.floor(DROP_DURATION / 3));
+      const rotateDuration = Math.max(ROTATE_DURATION, nudgeDuration);
+      estimatedMs = estimateAnimationDurationMs(previewSeq, {
+        fieldTopPaddingRows: FIELD_TOP_PADDING_ROWS,
+        nudgeDurationMs: nudgeDuration,
+        rotateDurationMs: rotateDuration,
+        hardDropDurationMs: HARD_DROP_DURATION,
+        pieceDelayMs: PIECE_DELAY,
+      });
+
+      const nextTarget = new Date(baseTime.getTime() + estimatedMs);
+      if (nextTarget.getHours() === h && nextTarget.getMinutes() === m) {
+        targetDate = nextTarget;
+        break;
+      }
+      targetDate = nextTarget;
+    }
+
+    const targetHours = targetDate.getHours();
+    const targetMinutes = targetDate.getMinutes();
+
+    // Skip if we'd render the same target minute again.
+    if (this.currentTime?.hours === targetHours && this.currentTime?.minutes === targetMinutes) {
       return;
     }
 
-    if (this.isAnimating) return;
-
     this.isAnimating = true;
-    this.currentTime = { hours, minutes };
+    this.currentTime = { hours: targetHours, minutes: targetMinutes };
+
+    const completionAt = new Date(baseTime.getTime() + estimatedMs);
+    const completionAtStr = this.formatHHMM(completionAt.getHours(), completionAt.getMinutes());
+
+    console.log(
+      `[tetris-time] speed=${SPEED} base=${this.formatHHMM(baseTime.getHours(), baseTime.getMinutes())} ` +
+        `target=${this.formatHHMM(targetHours, targetMinutes)} completionAt=${completionAtStr} etaMs=${estimatedMs}`
+    );
 
     try {
-      // Generate tile results
-      const seed = Date.now();
-      const tileResult = tileTimeGrid(hours, minutes, { seed });
+      // Solve + animate the predicted target time.
+      const tileResult = tileTimeGrid(targetHours, targetMinutes, { seed });
       const sequenceResult = sequencePieces(tileResult);
 
       // Animate one unified field
@@ -229,12 +264,11 @@ class TetrisClock {
     if (!seqResult.success) return;
 
     this.clearGrid();
-    await this.delay(this.randInt(0, DIGIT_START_JITTER_MAX));
 
     for (let i = 0; i < seqResult.sequence.length; i++) {
       const seqPiece = seqResult.sequence[i];
       await this.animatePieceDrop(seqPiece);
-      await this.delay(this.jitter(PIECE_DELAY, PIECE_DELAY_JITTER));
+      await this.delay(PIECE_DELAY);
     }
   }
 
@@ -248,15 +282,7 @@ class TetrisClock {
 
     const rotationCount = tetromino.rotations.length;
     const targetRotation = ((piece.rotationIndex % rotationCount) + rotationCount) % rotationCount;
-    const startRotation = (() => {
-      if (rotationCount <= 1) return targetRotation;
-      // Pick any rotation that isn't the target so we always "rotate into" place.
-      const options: number[] = [];
-      for (let r = 0; r < rotationCount; r++) {
-        if (r !== targetRotation) options.push(r);
-      }
-      return options[Math.floor(Math.random() * options.length)] ?? targetRotation;
-    })();
+    const startRotation = 0;
 
     // We simulate the sequencer's step list so the piece occupies real cells as it moves.
     // This matches classic "block-wise" Tetris motion more closely than translating final cells.
@@ -331,10 +357,18 @@ class TetrisClock {
       };
       renderAt();
       await this.delay(nudgeDuration);
+
+      // Let the piece fall a bit while moving sideways (more like real Tetris).
+      // Keep it deterministic and never drop past the final anchor row.
+      if (currentAnchor.row < piece.anchor.row) {
+        currentAnchor = { row: currentAnchor.row + 1, col: currentAnchor.col };
+        renderAt();
+        await this.delay(HARD_DROP_DURATION);
+      }
     }
 
     // Once correctly positioned (rotation + column), do a faster drop.
-    const hardDropDuration = this.jitter(HARD_DROP_DURATION, HARD_DROP_JITTER);
+    const hardDropDuration = HARD_DROP_DURATION;
 
     // Drop row-by-row from spawn row all the way to the final solver anchor row.
     for (let r = currentAnchor.row + 1; r <= piece.anchor.row; r++) {
