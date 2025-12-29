@@ -34,10 +34,10 @@ const PIECE_DELAY = 350; // ms between pieces
 const ROTATE_DURATION = 240; // ms per rotation step
 
 // Hard drop + de-sync jitter
-const HARD_DROP_DURATION = 70; // ms per row once positioned
+const HARD_DROP_DURATION = 40; // ms per row once positioned
 const HARD_DROP_JITTER = 25; // +/- ms
-const DIGIT_START_JITTER_MAX = 500; // ms
-const PIECE_DELAY_JITTER = 200; // +/- ms
+const DIGIT_START_JITTER_MAX = 100; // ms
+const PIECE_DELAY_JITTER = 800; // +/- ms
 
 class TetrisClock {
   private container: HTMLElement;
