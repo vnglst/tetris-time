@@ -41,7 +41,19 @@ const COLON_GAP_COLS = TIME_COLON_GAP_COLS;
 
 // Animation speed
 // Increase to speed up everything (e.g. 2 = ~2x faster, 0.5 = ~2x slower).
-const SPEED = 3;
+// Can be configured via URL parameter: ?speed=5
+const getSpeedFromUrl = (): number => {
+  const params = new URLSearchParams(window.location.search);
+  const speedParam = params.get("speed");
+  if (speedParam !== null) {
+    const parsed = parseFloat(speedParam);
+    if (!isNaN(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return 3; // default speed
+};
+const SPEED = getSpeedFromUrl();
 
 const MIN_ANIM_STEP_MS = 16;
 const scaleMs = (baseMs: number, minMs = 0): number => Math.max(minMs, Math.round(baseMs / SPEED));
