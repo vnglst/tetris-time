@@ -4,6 +4,28 @@ A clock that displays the time using falling Tetris pieces. Watch the tetrominoe
 
 **Live demo:** [tetris-time.koenvangilst.nl](https://tetris-time.koenvangilst.nl)
 
+## URL Parameters
+
+### Clock Mode (default)
+
+By default, the clock displays the current time. No parameters needed.
+
+### Countdown Mode
+
+Use the `to` parameter to count down to a specific date:
+
+- **New Year:** [?to=newyear](https://tetris-time.koenvangilst.nl/?to=newyear)
+- **Specific date (UTC):** [?to=2025-12-31T23:59:00Z](https://tetris-time.koenvangilst.nl/?to=2025-12-31T23:59:00Z)
+- **With timezone offset:** [?to=2025-07-04T12:00:00-04:00](https://tetris-time.koenvangilst.nl/?to=2025-07-04T12:00:00-04:00)
+
+### Speed
+
+Use the `speed` parameter to control animation speed (default: 3, higher = faster):
+
+- **Slow:** [?speed=1](https://tetris-time.koenvangilst.nl/?speed=1)
+- **Fast:** [?speed=5](https://tetris-time.koenvangilst.nl/?speed=5)
+- **Combined:** [?to=newyear&speed=5](https://tetris-time.koenvangilst.nl/?to=newyear&speed=5)
+
 ## Development
 
 To run locally:
