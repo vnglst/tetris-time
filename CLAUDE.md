@@ -32,14 +32,14 @@ Before completing any feature or bug fix, always run:
 
 ### Committing Changes
 
-When the user asks to commit, use ALL user prompts from the conversation as the commit message (not a summary). Each prompt should be on its own line. Example:
+When the user asks to commit, provide a summary of what you've implemented and a list of ALL user prompts from the conversation as the commit message. Each prompt should be on its own line. Example:
 
 ```
-Can you make sure it also displays on mobile and other screen sizes.
+Implemented responsive design for Tetris Time clock display.
 
-It needs a little more margin on iPhone 12 Pro when in landscape mode.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+Prompts:
+- Can you make sure it also displays on mobile and other screen sizes.
+- It needs a little more margin on iPhone 12 Pro when in landscape mode.
 
 Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
 ```
