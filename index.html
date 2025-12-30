@@ -272,6 +272,33 @@
         color: white;
         font-size: 24px;
       }
+
+      /* Music toggle button */
+      .music-toggle {
+        position: absolute;
+        top: -32px;
+        right: var(--grid-padding);
+        background: #1a3a5c;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 6px;
+        opacity: 0.7;
+        transition: opacity 0.2s ease;
+      }
+
+      .music-toggle:hover {
+        opacity: 1;
+      }
+
+      .music-toggle svg {
+        width: 14px;
+        height: 14px;
+        fill: #77aaff;
+      }
     </style>
   </head>
   <body>
