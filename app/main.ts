@@ -174,6 +174,18 @@ class TetrisClock {
     this.colonElement.style.top = `${y}px`;
   }
 
+  private showColon() {
+    if (this.colonElement) {
+      this.colonElement.classList.add("visible");
+    }
+  }
+
+  private hideColon() {
+    if (this.colonElement) {
+      this.colonElement.classList.remove("visible");
+    }
+  }
+
   private getCell(row: number, col: number): HTMLElement | null {
     if (!this.grid) return null;
     return this.grid.querySelector(`[data-row="${row}"][data-col="${col}"]`);
@@ -184,6 +196,7 @@ class TetrisClock {
     if (!grid) return;
 
     this.lockedCells.clear();
+    this.hideColon();
 
     // Batch all cell resets for single repaint
     const cells = grid.querySelectorAll(".cell");
@@ -342,6 +355,9 @@ class TetrisClock {
       await this.animatePieceDrop(seqPiece);
       await this.delay(PIECE_DELAY);
     }
+
+    // Show the colon after all pieces have dropped
+    this.showColon();
 
     // Classic Tetris clear animation after time is fully displayed
     await this.clearRowsAnimation();
