@@ -47,7 +47,7 @@ const SPEED = (() => {
   const speedParam = params.get("speed");
   if (speedParam !== null) {
     const parsed = parseFloat(speedParam);
-    if (!isNaN(parsed) && parsed > 0) return parsed;
+    if (!isNaN(parsed) && parsed > 0) return Math.min(parsed, 10);
   }
   return 3;
 })();
