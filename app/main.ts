@@ -15,6 +15,9 @@ import {
 } from "../src/index";
 import { estimateAnimationDurationMs } from "../src/animation";
 import { getModeFromUrl, getTargetDateFromUrl, getCountdownTime, getNextNewYear, type ClockMode } from "./countdown";
+import { parseSpeedParam } from "./url-helpers";
+import { formatHHMM, floorToMinute } from "./time-helpers";
+import { cellKey, parseCellKey } from "./cell-helpers";
 
 // Color mapping for digit tetrominos (lit cells)
 // Colors from the Mindful Palette by Alex Cristache
@@ -44,12 +47,7 @@ const COLON_GAP_COLS = TIME_COLON_GAP_COLS;
 // Get initial speed from URL parameter (default: 3)
 const getInitialSpeed = (): number => {
   const params = new URLSearchParams(window.location.search);
-  const speedParam = params.get("speed");
-  if (speedParam !== null) {
-    const parsed = parseFloat(speedParam);
-    if (!isNaN(parsed) && parsed > 0) return Math.min(parsed, 10);
-  }
-  return 3;
+  return parseSpeedParam(params);
 };
 
 // Get initial mode from URL parameter (default: 'clock')
@@ -541,10 +539,6 @@ class TetrisClock {
     });
   }
 
-  private cellKey(row: number, col: number): string {
-    return `${row},${col}`;
-  }
-
   private setCellOccupied(row: number, col: number, pieceType: string, color: string) {
     const cell = this.getCell(row, col);
     if (!cell) return;
@@ -554,24 +548,12 @@ class TetrisClock {
   }
 
   private setCellEmptyIfUnlocked(row: number, col: number) {
-    if (this.lockedCells.has(this.cellKey(row, col))) return;
+    if (this.lockedCells.has(cellKey(row, col))) return;
     const cell = this.getCell(row, col);
     if (!cell) return;
     // Batch style reset using cssText for single repaint
     cell.className = "cell empty";
     cell.style.cssText = "";
-  }
-
-  private formatHHMM(hours: number, minutes: number): string {
-    const hh = String(hours).padStart(2, "0");
-    const mm = String(minutes).padStart(2, "0");
-    return `${hh}:${mm}`;
-  }
-
-  private floorToMinute(date: Date): Date {
-    const d = new Date(date);
-    d.setSeconds(0, 0);
-    return d;
   }
 
   private async updateTime() {
@@ -601,13 +583,13 @@ class TetrisClock {
         this.countdownFinished = true;
       }
 
-      logMessage = `[tetris-time] mode=countdown target=${this.targetDate.toISOString()} remaining=${this.formatHHMM(
+      logMessage = `[tetris-time] mode=countdown target=${this.targetDate.toISOString()} remaining=${formatHHMM(
         targetHours,
         targetMinutes
       )} finished=${countdown.finished}`;
     } else {
       // Clock mode: use current time with fixed-point iteration
-      const baseTime = this.floorToMinute(new Date());
+      const baseTime = floorToMinute(new Date());
       seed = baseTime.getTime();
 
       // Fixed-point iteration: target minute depends on the duration of animating that target.
@@ -643,11 +625,11 @@ class TetrisClock {
       targetMinutes = targetDate.getMinutes();
 
       const completionAt = new Date(baseTime.getTime() + estimatedMs);
-      const completionAtStr = this.formatHHMM(completionAt.getHours(), completionAt.getMinutes());
+      const completionAtStr = formatHHMM(completionAt.getHours(), completionAt.getMinutes());
 
       logMessage =
-        `[tetris-time] speed=${this.speed} base=${this.formatHHMM(baseTime.getHours(), baseTime.getMinutes())} ` +
-        `target=${this.formatHHMM(targetHours, targetMinutes)} completionAt=${completionAtStr} etaMs=${estimatedMs}`;
+        `[tetris-time] speed=${this.speed} base=${formatHHMM(baseTime.getHours(), baseTime.getMinutes())} ` +
+        `target=${formatHHMM(targetHours, targetMinutes)} completionAt=${completionAtStr} etaMs=${estimatedMs}`;
     }
 
     // Skip if we'd render the same target time again (clock mode only).
@@ -746,24 +728,24 @@ class TetrisClock {
         if (visualRow < 0 || visualRow >= FIELD_ROWS) continue;
         if (visualCol < 0 || visualCol >= FIELD_COLS) continue;
 
-        nextKeys.add(this.cellKey(visualRow, visualCol));
+        nextKeys.add(cellKey(visualRow, visualCol));
       }
 
       // Clear only cells we are leaving (avoids flicker on overlapping rotations)
       for (const key of activeKeys) {
         if (nextKeys.has(key)) continue;
-        const [r, c] = key.split(",").map(Number);
-        if (Number.isFinite(r) && Number.isFinite(c)) {
-          this.setCellEmptyIfUnlocked(r, c);
+        const parsed = parseCellKey(key);
+        if (parsed) {
+          this.setCellEmptyIfUnlocked(parsed.row, parsed.col);
         }
       }
 
       // Paint only newly occupied cells
       for (const key of nextKeys) {
         if (activeKeys.has(key)) continue;
-        const [r, c] = key.split(",").map(Number);
-        if (Number.isFinite(r) && Number.isFinite(c)) {
-          this.setCellOccupied(r, c, piece.type, color);
+        const parsed = parseCellKey(key);
+        if (parsed) {
+          this.setCellOccupied(parsed.row, parsed.col, piece.type, color);
         }
       }
 
