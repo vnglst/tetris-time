@@ -31,6 +31,8 @@ Before completing any feature or bug fix, always run:
 1. `npm test` - All tests must pass
 2. `npm run typecheck` - No type errors allowed
 
+Important: When a feature is complete and the user confirms it works as expected commit changes using all the user prompts and input as a single commit message.
+
 ## Architecture
 
 ### Core Library (`src/`)
