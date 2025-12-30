@@ -230,9 +230,10 @@ export function tileTime(hours: number, minutes: number, options?: TileOptions):
   ];
 }
 
-function validateTime(hours: number, minutes: number): void {
-  if (hours < 0 || hours > 23 || !Number.isInteger(hours)) {
-    throw new Error(`Invalid hours: ${hours}. Must be an integer 0-23.`);
+function validateTime(hours: number, minutes: number, extendedHours = false): void {
+  const maxHours = extendedHours ? 99 : 23;
+  if (hours < 0 || hours > maxHours || !Number.isInteger(hours)) {
+    throw new Error(`Invalid hours: ${hours}. Must be an integer 0-${maxHours}.`);
   }
   if (minutes < 0 || minutes > 59 || !Number.isInteger(minutes)) {
     throw new Error(`Invalid minutes: ${minutes}. Must be an integer 0-59.`);
@@ -243,9 +244,10 @@ function buildTimeMask(
   hours: number,
   minutes: number,
   digitGapCols = TIME_DIGIT_GAP_COLS,
-  colonGapCols = TIME_COLON_GAP_COLS
+  colonGapCols = TIME_COLON_GAP_COLS,
+  extendedHours = false
 ): DigitMask {
-  validateTime(hours, minutes);
+  validateTime(hours, minutes, extendedHours);
 
   const h1 = Math.floor(hours / 10);
   const h2 = hours % 10;
@@ -290,9 +292,11 @@ export function tileTimeGrid(
   options?: TileOptions & {
     digitGapCols?: number;
     colonGapCols?: number;
+    extendedHours?: boolean;
   }
 ): TileResult {
-  validateTime(hours, minutes);
+  const extendedHours = options?.extendedHours ?? false;
+  validateTime(hours, minutes, extendedHours);
 
   const digitGapCols = options?.digitGapCols ?? TIME_DIGIT_GAP_COLS;
   const colonGapCols = options?.colonGapCols ?? TIME_COLON_GAP_COLS;

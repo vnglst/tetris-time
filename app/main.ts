@@ -13,6 +13,7 @@ import {
   getAbsoluteCells,
 } from "../src/index";
 import { estimateAnimationDurationMs } from "../src/animation";
+import { getModeFromUrl, getTargetDateFromUrl, getCountdownTime, type ClockMode } from "./countdown";
 
 // Color mapping for digit tetrominos (lit cells)
 // Colors from the Mindful Palette by Alex Cristache
@@ -55,6 +56,14 @@ const getSpeedFromUrl = (): number => {
 };
 const SPEED = getSpeedFromUrl();
 
+// Mode configuration: 'clock' (default) or 'countdown'
+// Can be configured via URL parameter: ?mode=countdown
+const MODE: ClockMode = getModeFromUrl();
+
+// Target date for countdown mode
+// Can be configured via URL parameter: ?to=2025-01-01T00:00:00
+const TARGET_DATE: Date | null = getTargetDateFromUrl();
+
 const MIN_ANIM_STEP_MS = 16;
 const scaleMs = (baseMs: number, minMs = 0): number => Math.max(minMs, Math.round(baseMs / SPEED));
 
@@ -83,6 +92,7 @@ class TetrisClock {
   private currentTime: { hours: number; minutes: number } | null = null;
   private isAnimating = false;
   private lockedCells: Set<string> = new Set();
+  private countdownFinished = false;
 
   constructor(containerId: string) {
     const container = document.getElementById(containerId);
@@ -217,43 +227,73 @@ class TetrisClock {
   private async updateTime() {
     if (this.isAnimating) return;
 
-    // Stabilize predictions within a minute so we don't re-render every second.
-    const baseTime = this.floorToMinute(new Date());
-    const seed = baseTime.getTime();
+    // In countdown mode, stop updating once countdown is finished
+    if (this.countdownFinished) return;
 
-    // Fixed-point iteration: target minute depends on the duration of animating that target.
-    // This is especially important at slow speeds where animations span multiple minutes.
-    let targetDate = new Date(baseTime);
-    let estimatedMs = 0;
-    for (let i = 0; i < 3; i++) {
-      const h = targetDate.getHours();
-      const m = targetDate.getMinutes();
-      const previewTile = tileTimeGrid(h, m, { seed });
-      const previewSeq = sequencePieces(previewTile);
-      const nudgeDuration = Math.max(scaleMs(40, MIN_ANIM_STEP_MS), Math.floor(DROP_DURATION / 3));
-      const rotateDuration = Math.max(ROTATE_DURATION, nudgeDuration);
-      estimatedMs = estimateAnimationDurationMs(previewSeq, {
-        fieldTopPaddingRows: FIELD_TOP_PADDING_ROWS,
-        nudgeDurationMs: nudgeDuration,
-        rotateDurationMs: rotateDuration,
-        hardDropDurationMs: DROP_DURATION,
-        pieceDelayMs: PIECE_DELAY,
-        thinkDurationMs: THINK_DURATION,
-        minHardDropDelayMs: MIN_HARD_DROP_DELAY,
-      });
+    let targetHours: number;
+    let targetMinutes: number;
+    let seed: number;
+    let logMessage: string;
 
-      const nextTarget = new Date(baseTime.getTime() + estimatedMs);
-      if (nextTarget.getHours() === h && nextTarget.getMinutes() === m) {
-        targetDate = nextTarget;
-        break;
+    if (MODE === "countdown" && TARGET_DATE) {
+      // Countdown mode: calculate time remaining
+      const countdown = getCountdownTime(TARGET_DATE);
+      targetHours = countdown.hours;
+      targetMinutes = countdown.minutes;
+
+      // Use target date as seed for deterministic rendering
+      seed = TARGET_DATE.getTime();
+
+      if (countdown.finished) {
+        this.countdownFinished = true;
       }
-      targetDate = nextTarget;
+
+      logMessage = `[tetris-time] mode=countdown target=${TARGET_DATE.toISOString()} remaining=${this.formatHHMM(targetHours, targetMinutes)} finished=${countdown.finished}`;
+    } else {
+      // Clock mode: use current time with fixed-point iteration
+      const baseTime = this.floorToMinute(new Date());
+      seed = baseTime.getTime();
+
+      // Fixed-point iteration: target minute depends on the duration of animating that target.
+      // This is especially important at slow speeds where animations span multiple minutes.
+      let targetDate = new Date(baseTime);
+      let estimatedMs = 0;
+      for (let i = 0; i < 3; i++) {
+        const h = targetDate.getHours();
+        const m = targetDate.getMinutes();
+        const previewTile = tileTimeGrid(h, m, { seed });
+        const previewSeq = sequencePieces(previewTile);
+        const nudgeDuration = Math.max(scaleMs(40, MIN_ANIM_STEP_MS), Math.floor(DROP_DURATION / 3));
+        const rotateDuration = Math.max(ROTATE_DURATION, nudgeDuration);
+        estimatedMs = estimateAnimationDurationMs(previewSeq, {
+          fieldTopPaddingRows: FIELD_TOP_PADDING_ROWS,
+          nudgeDurationMs: nudgeDuration,
+          rotateDurationMs: rotateDuration,
+          hardDropDurationMs: DROP_DURATION,
+          pieceDelayMs: PIECE_DELAY,
+          thinkDurationMs: THINK_DURATION,
+          minHardDropDelayMs: MIN_HARD_DROP_DELAY,
+        });
+
+        const nextTarget = new Date(baseTime.getTime() + estimatedMs);
+        if (nextTarget.getHours() === h && nextTarget.getMinutes() === m) {
+          targetDate = nextTarget;
+          break;
+        }
+        targetDate = nextTarget;
+      }
+
+      targetHours = targetDate.getHours();
+      targetMinutes = targetDate.getMinutes();
+
+      const completionAt = new Date(baseTime.getTime() + estimatedMs);
+      const completionAtStr = this.formatHHMM(completionAt.getHours(), completionAt.getMinutes());
+
+      logMessage = `[tetris-time] speed=${SPEED} base=${this.formatHHMM(baseTime.getHours(), baseTime.getMinutes())} ` +
+        `target=${this.formatHHMM(targetHours, targetMinutes)} completionAt=${completionAtStr} etaMs=${estimatedMs}`;
     }
 
-    const targetHours = targetDate.getHours();
-    const targetMinutes = targetDate.getMinutes();
-
-    // Skip if we'd render the same target minute again.
+    // Skip if we'd render the same target time again.
     if (this.currentTime?.hours === targetHours && this.currentTime?.minutes === targetMinutes) {
       return;
     }
@@ -261,17 +301,12 @@ class TetrisClock {
     this.isAnimating = true;
     this.currentTime = { hours: targetHours, minutes: targetMinutes };
 
-    const completionAt = new Date(baseTime.getTime() + estimatedMs);
-    const completionAtStr = this.formatHHMM(completionAt.getHours(), completionAt.getMinutes());
-
-    console.log(
-      `[tetris-time] speed=${SPEED} base=${this.formatHHMM(baseTime.getHours(), baseTime.getMinutes())} ` +
-        `target=${this.formatHHMM(targetHours, targetMinutes)} completionAt=${completionAtStr} etaMs=${estimatedMs}`
-    );
+    console.log(logMessage);
 
     try {
-      // Solve + animate the predicted target time.
-      const tileResult = tileTimeGrid(targetHours, targetMinutes, { seed });
+      // Solve + animate the target time.
+      const extendedHours = MODE === "countdown";
+      const tileResult = tileTimeGrid(targetHours, targetMinutes, { seed, extendedHours });
       const sequenceResult = sequencePieces(tileResult);
 
       // Animate one unified field

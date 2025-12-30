@@ -211,4 +211,22 @@ describe("tileTimeGrid", () => {
     expect(() => tileTimeGrid(0, 60)).toThrow();
     expect(() => tileTimeGrid(0, 30.5)).toThrow();
   });
+
+  it("should support extended hours (0-99) for countdown mode", () => {
+    // Hours > 23 should work with extendedHours option
+    const result = tileTimeGrid(38, 30, { seed: 42, extendedHours: true });
+    expect(result.success).toBe(true);
+
+    // Should also work at the upper limit
+    const result99 = tileTimeGrid(99, 59, { seed: 42, extendedHours: true });
+    expect(result99.success).toBe(true);
+  });
+
+  it("should throw for hours > 23 without extendedHours option", () => {
+    expect(() => tileTimeGrid(38, 30)).toThrow("Invalid hours: 38. Must be an integer 0-23.");
+  });
+
+  it("should throw for hours > 99 even with extendedHours option", () => {
+    expect(() => tileTimeGrid(100, 0, { extendedHours: true })).toThrow("Invalid hours: 100. Must be an integer 0-99.");
+  });
 });
