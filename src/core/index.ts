@@ -36,3 +36,6 @@ export {
 
 // Sequencer API
 export { sequencePieces } from "./sequencer";
+
+// Animation utilities
+export { estimateAnimationDurationMs, type AnimationEstimateConfig } from "./animation";

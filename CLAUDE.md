@@ -44,8 +44,6 @@ Prompts:
 Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
 ```
 
-## Architecture
-
 ## Key Design Principles
 
 ### Tetris Mechanics

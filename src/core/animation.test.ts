@@ -112,11 +112,6 @@ describe("estimateAnimationDurationMs", () => {
       thinkDurationMs: THINK_DURATION,
     });
 
-    console.log(`Pieces: ${seq.sequence.length}`);
-    console.log(`Current estimate: ${currentEstimate}ms`);
-    console.log(`Actual behavior: ${actualBehaviorMs}ms`);
-    console.log(`Difference: ${currentEstimate - actualBehaviorMs}ms`);
-
     // Estimate should now match actual behavior
     expect(currentEstimate).toBe(actualBehaviorMs);
   });

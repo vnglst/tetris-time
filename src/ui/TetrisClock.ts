@@ -7,17 +7,17 @@ import {
   TIME_COLON_GAP_COLS,
   tileTimeGrid,
   sequencePieces,
+  estimateAnimationDurationMs,
   type TileResult,
   type SequenceResult,
   type SequencedPiece,
   TETROMINOES,
   getAbsoluteCells,
-} from "../src/index";
-import { estimateAnimationDurationMs } from "../src/animation";
+} from "../core";
 import { getModeFromUrl, getTargetDateFromUrl, getCountdownTime, getNextNewYear, type ClockMode } from "./countdown";
-import { parseSpeedParam } from "./url-helpers";
-import { formatHHMM, floorToMinute } from "./time-helpers";
-import { cellKey, parseCellKey } from "./cell-helpers";
+import { parseSpeedParam } from "../utils/url-helpers";
+import { formatHHMM, floorToMinute } from "../utils/time-helpers";
+import { cellKey, parseCellKey } from "../utils/cell-helpers";
 
 // Color mapping for digit tetrominos (lit cells)
 // Colors from the Mindful Palette by Alex Cristache
