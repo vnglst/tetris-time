@@ -8,6 +8,35 @@ import type {
 import { TETROMINOES } from './tetrominoes';
 
 /**
+ * Pick an item from a sorted array using an interleaved pattern.
+ * Alternates between picking from the end and the start:
+ * index 0 -> last item (rightmost)
+ * index 1 -> first item (leftmost)
+ * index 2 -> second to last
+ * index 3 -> second from start
+ * etc.
+ */
+function pickInterleaved<T>(sortedItems: T[], sequenceIndex: number): T {
+  if (sortedItems.length === 1) {
+    return sortedItems[0];
+  }
+
+  // Alternate between picking from end (even) and start (odd)
+  const pickFromEnd = sequenceIndex % 2 === 0;
+  const depth = Math.floor(sequenceIndex / 2);
+
+  if (pickFromEnd) {
+    // Pick from the end, going inward
+    const idx = Math.max(0, sortedItems.length - 1 - depth);
+    return sortedItems[idx];
+  } else {
+    // Pick from the start, going inward
+    const idx = Math.min(sortedItems.length - 1, depth);
+    return sortedItems[idx];
+  }
+}
+
+/**
  * Check if a piece can be dropped from the top to its final position
  * given the current state of placed pieces
  */
@@ -203,19 +232,15 @@ export function sequencePieces(result: TileResult): SequenceResult {
       if (aMaxRow !== bMaxRow) {
         return bMaxRow - aMaxRow; // Higher row (bottom) first
       }
-      // Tie-breaker: alternate direction based on row (zigzag pattern)
-      // Even rows: left-to-right, Odd rows: right-to-left
+      // Tie-breaker: sort by column (left to right) for consistent ordering
       const aMinCol = Math.min(...a.cells.map((c) => c.col));
       const bMinCol = Math.min(...b.cells.map((c) => c.col));
-      if (aMaxRow % 2 === 0) {
-        return aMinCol - bMinCol; // Left to right
-      } else {
-        return bMinCol - aMinCol; // Right to left
-      }
+      return aMinCol - bMinCol;
     });
 
-    // Place the first supported piece
-    const piece = supportedPieces[0];
+    // Pick piece using interleaved pattern: alternate between right and left sides
+    // This creates visual variety (right, left, right, left, etc.)
+    const piece = pickInterleaved(supportedPieces, sequence.length);
     remainingPieces.delete(piece.id);
 
     // Add piece cells to placed set
@@ -290,7 +315,7 @@ function tryReorderForValidSequence(
 
   const sortedIds: string[] = [];
   while (queue.length > 0) {
-    // Sort queue by row (bottom first), then alternate left/right by row
+    // Sort queue by row (bottom first), then by column (left to right)
     queue.sort((a, b) => {
       const pieceA = pieceMap.get(a)!;
       const pieceB = pieceMap.get(b)!;
@@ -299,23 +324,21 @@ function tryReorderForValidSequence(
       if (aMaxRow !== bMaxRow) {
         return bMaxRow - aMaxRow; // Higher row (bottom) first
       }
-      // Tie-breaker: alternate direction based on row (zigzag pattern)
+      // Tie-breaker: sort by column for consistent ordering
       const aMinCol = Math.min(...pieceA.cells.map((c) => c.col));
       const bMinCol = Math.min(...pieceB.cells.map((c) => c.col));
-      if (aMaxRow % 2 === 0) {
-        return aMinCol - bMinCol; // Left to right
-      } else {
-        return bMinCol - aMinCol; // Right to left
-      }
+      return aMinCol - bMinCol;
     });
 
-    const current = queue.shift()!;
-    sortedIds.push(current);
+    // Pick using interleaved pattern for visual variety
+    const pickedId = pickInterleaved(queue, sortedIds.length);
+    queue.splice(queue.indexOf(pickedId), 1);
+    sortedIds.push(pickedId);
 
     // Update in-degrees
     for (const [id, deps] of dependencies) {
-      if (deps.has(current)) {
-        deps.delete(current);
+      if (deps.has(pickedId)) {
+        deps.delete(pickedId);
         const newDegree = inDegree.get(id)! - 1;
         inDegree.set(id, newDegree);
         if (newDegree === 0) {
