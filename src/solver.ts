@@ -212,12 +212,7 @@ export function tileDigit(digit: number, options?: TileOptions): TileResult {
  * Returns an array of 4 TileResults, one for each digit.
  */
 export function tileTime(hours: number, minutes: number, options?: TileOptions): TileResult[] {
-  if (hours < 0 || hours > 23 || !Number.isInteger(hours)) {
-    throw new Error(`Invalid hours: ${hours}. Must be an integer 0-23.`);
-  }
-  if (minutes < 0 || minutes > 59 || !Number.isInteger(minutes)) {
-    throw new Error(`Invalid minutes: ${minutes}. Must be an integer 0-59.`);
-  }
+  validateTime(hours, minutes);
 
   const h1 = Math.floor(hours / 10);
   const h2 = hours % 10;

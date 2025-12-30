@@ -147,28 +147,4 @@ export class Grid {
     return this.cells.map((row) => [...row]);
   }
 
-  /**
-   * Get the mask value for a cell.
-   */
-  getMaskValue(row: number, col: number): boolean {
-    return this.mask[row][col];
-  }
-
-  /**
-   * Create a deep clone of this grid.
-   */
-  clone(): Grid {
-    const cloned = new Grid(this.rows, this.cols, this.mask);
-
-    // Copy placed pieces
-    for (const piece of this.placedPieces.values()) {
-      // Manually add the piece without generating a new ID
-      cloned.placedPieces.set(piece.id, piece);
-      for (const cell of piece.cells) {
-        cloned.cells[cell.row][cell.col] = piece;
-      }
-    }
-
-    return cloned;
-  }
 }

@@ -4,40 +4,8 @@ import type {
   SequencedPiece,
   SequenceResult,
   PlacementStep,
-  Cell,
 } from './types';
 import { TETROMINOES } from './tetrominoes';
-
-/**
- * Get the bounding box of a piece's cells
- */
-function getBoundingBox(cells: Cell[]): {
-  minRow: number;
-  maxRow: number;
-  minCol: number;
-  maxCol: number;
-} {
-  const rows = cells.map((c) => c.row);
-  const cols = cells.map((c) => c.col);
-  return {
-    minRow: Math.min(...rows),
-    maxRow: Math.max(...rows),
-    minCol: Math.min(...cols),
-    maxCol: Math.max(...cols),
-  };
-}
-
-/**
- * Get the spawn position for a piece (centered at top)
- */
-function getSpawnColumn(piece: PlacedTetromino, gridCols: number): number {
-  const tetromino = TETROMINOES[piece.type];
-  const rotation = tetromino.rotations[piece.rotationIndex];
-  const width = Math.max(...rotation.map((c) => c.col)) + 1;
-
-  // Center the piece at the top
-  return Math.floor((gridCols - width) / 2);
-}
 
 /**
  * Check if a piece can be dropped from the top to its final position
@@ -235,10 +203,15 @@ export function sequencePieces(result: TileResult): SequenceResult {
       if (aMaxRow !== bMaxRow) {
         return bMaxRow - aMaxRow; // Higher row (bottom) first
       }
-      // Tie-breaker: leftmost column
+      // Tie-breaker: alternate direction based on row (zigzag pattern)
+      // Even rows: left-to-right, Odd rows: right-to-left
       const aMinCol = Math.min(...a.cells.map((c) => c.col));
       const bMinCol = Math.min(...b.cells.map((c) => c.col));
-      return aMinCol - bMinCol;
+      if (aMaxRow % 2 === 0) {
+        return aMinCol - bMinCol; // Left to right
+      } else {
+        return bMinCol - aMinCol; // Right to left
+      }
     });
 
     // Place the first supported piece
@@ -317,13 +290,23 @@ function tryReorderForValidSequence(
 
   const sortedIds: string[] = [];
   while (queue.length > 0) {
-    // Sort queue by row (bottom first) for consistent ordering
+    // Sort queue by row (bottom first), then alternate left/right by row
     queue.sort((a, b) => {
       const pieceA = pieceMap.get(a)!;
       const pieceB = pieceMap.get(b)!;
       const aMaxRow = Math.max(...pieceA.cells.map((c) => c.row));
       const bMaxRow = Math.max(...pieceB.cells.map((c) => c.row));
-      return bMaxRow - aMaxRow;
+      if (aMaxRow !== bMaxRow) {
+        return bMaxRow - aMaxRow; // Higher row (bottom) first
+      }
+      // Tie-breaker: alternate direction based on row (zigzag pattern)
+      const aMinCol = Math.min(...pieceA.cells.map((c) => c.col));
+      const bMinCol = Math.min(...pieceB.cells.map((c) => c.col));
+      if (aMaxRow % 2 === 0) {
+        return aMinCol - bMinCol; // Left to right
+      } else {
+        return bMinCol - aMinCol; // Right to left
+      }
     });
 
     const current = queue.shift()!;

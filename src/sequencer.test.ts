@@ -300,6 +300,81 @@ describe("Tetris mechanics", () => {
   });
 });
 
+describe("piece placement order variation", () => {
+  it("should not always place pieces left-to-right within same row", () => {
+    // Test that the sequencer varies the placement direction
+    // by checking that pieces on the same row level are NOT always left-to-right
+    const tileResult = tileTimeGrid(12, 34, { seed: 42 });
+    const seqResult = sequencePieces(tileResult);
+
+    expect(seqResult.success).toBe(true);
+
+    // Group pieces by their max row (the row they "settle" at)
+    const piecesByMaxRow = new Map<number, { col: number; order: number }[]>();
+    for (const seqPiece of seqResult.sequence) {
+      const maxRow = Math.max(...seqPiece.piece.cells.map((c) => c.row));
+      const minCol = Math.min(...seqPiece.piece.cells.map((c) => c.col));
+      if (!piecesByMaxRow.has(maxRow)) {
+        piecesByMaxRow.set(maxRow, []);
+      }
+      piecesByMaxRow.get(maxRow)!.push({ col: minCol, order: seqPiece.order });
+    }
+
+    // Check if there's any row where pieces are NOT strictly left-to-right ordered
+    let hasNonLeftToRightRow = false;
+    for (const [_row, pieces] of piecesByMaxRow) {
+      if (pieces.length > 1) {
+        // Sort by order and check if columns are strictly increasing
+        const sorted = [...pieces].sort((a, b) => a.order - b.order);
+        for (let i = 1; i < sorted.length; i++) {
+          if (sorted[i].col < sorted[i - 1].col) {
+            hasNonLeftToRightRow = true;
+            break;
+          }
+        }
+      }
+      if (hasNonLeftToRightRow) break;
+    }
+
+    expect(hasNonLeftToRightRow).toBe(true);
+  });
+
+  it("should vary placement direction - not all rows left-to-right", () => {
+    // For a full time display, check that among the first pieces placed (bottom rows),
+    // the direction varies between rows
+    const tileResult = tileTimeGrid(12, 34, { seed: 42 });
+    const seqResult = sequencePieces(tileResult);
+
+    expect(seqResult.success).toBe(true);
+
+    // Get the bottom row (maxRow = 9 for TIME_ROWS = 10)
+    const bottomRowPieces: { col: number; order: number }[] = [];
+    for (const seqPiece of seqResult.sequence) {
+      const maxRow = Math.max(...seqPiece.piece.cells.map((c) => c.row));
+      if (maxRow === 9) {
+        const minCol = Math.min(...seqPiece.piece.cells.map((c) => c.col));
+        bottomRowPieces.push({ col: minCol, order: seqPiece.order });
+      }
+    }
+
+    // Sort by order to see the actual placement sequence
+    bottomRowPieces.sort((a, b) => a.order - b.order);
+
+    // The bottom row should NOT be strictly left-to-right
+    // (i.e., at least one piece should be placed before a piece to its left)
+    let isStrictlyLeftToRight = true;
+    for (let i = 1; i < bottomRowPieces.length; i++) {
+      if (bottomRowPieces[i].col < bottomRowPieces[i - 1].col) {
+        isStrictlyLeftToRight = false;
+        break;
+      }
+    }
+
+    expect(isStrictlyLeftToRight).toBe(false);
+  });
+
+});
+
 describe("step generation", () => {
   it("should generate spawn, optional rotate, optional move, drop, lock sequence", () => {
     const tileResult = tileDigit(8, { seed: 42 });

@@ -19,25 +19,6 @@ describe('Grid', () => {
       expect(grid.isFull()).toBe(false);
       expect(grid.findFirstEmpty()).toEqual({ row: 0, col: 0 });
     });
-
-    it('should use default mask (all true) when not provided', () => {
-      const grid = new Grid(4, 4);
-      expect(grid.getMaskValue(0, 0)).toBe(true);
-      expect(grid.getMaskValue(3, 3)).toBe(true);
-    });
-
-    it('should use provided mask', () => {
-      const mask = [
-        [true, true, false, false],
-        [true, true, false, false],
-        [false, false, true, true],
-        [false, false, true, true],
-      ];
-      const grid = new Grid(4, 4, mask);
-      expect(grid.getMaskValue(0, 0)).toBe(true);
-      expect(grid.getMaskValue(0, 2)).toBe(false);
-      expect(grid.getMaskValue(2, 2)).toBe(true);
-    });
   });
 
   describe('canPlace', () => {
@@ -257,21 +238,4 @@ describe('Grid', () => {
     });
   });
 
-  describe('clone', () => {
-    it('should create an independent copy', () => {
-      const grid = new Grid(4, 4);
-      grid.place(TETROMINOES.O, 0, { row: 0, col: 0 });
-
-      const cloned = grid.clone();
-
-      // Cloned should have same state
-      expect(cloned.getPlacedPieces()).toHaveLength(1);
-      expect(cloned.findFirstEmpty()).toEqual({ row: 0, col: 2 });
-
-      // Modifying original shouldn't affect clone
-      grid.place(TETROMINOES.O, 0, { row: 0, col: 2 });
-      expect(grid.getPlacedPieces()).toHaveLength(2);
-      expect(cloned.getPlacedPieces()).toHaveLength(1);
-    });
-  });
 });
