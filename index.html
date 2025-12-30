@@ -53,6 +53,33 @@
         background-attachment: fixed;
       }
 
+      /* Scrollbar styling */
+      /* For Webkit browsers (Chrome, Safari, Edge) */
+      ::-webkit-scrollbar {
+        width: 12px;
+      }
+
+      ::-webkit-scrollbar-track {
+        background: rgba(10, 20, 40, 0.8);
+        border-radius: 10px;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background: #77aaff;
+        border-radius: 10px;
+        border: 2px solid rgba(10, 20, 40, 0.8);
+      }
+
+      ::-webkit-scrollbar-thumb:hover {
+        background: #99bbff;
+      }
+
+      /* For Firefox */
+      * {
+        scrollbar-width: thin;
+        scrollbar-color: #77aaff rgba(10, 20, 40, 0.8);
+      }
+
       body {
         min-height: 100vh;
         display: flex;
@@ -273,11 +300,15 @@
         font-size: 24px;
       }
 
-      /* Music toggle button */
-      .music-toggle {
+      /* Settings menu */
+      .settings-menu {
         position: fixed;
         top: 20px;
         right: 20px;
+        z-index: 1000;
+      }
+
+      .settings-toggle {
         background: transparent;
         border: none;
         border-radius: 4px;
@@ -287,18 +318,131 @@
         justify-content: center;
         padding: 6px;
         opacity: 0.7;
-        transition: opacity 0.2s ease;
-        z-index: 1000;
+        transition: opacity 0.2s ease, transform 0.3s ease;
       }
 
-      .music-toggle:hover {
+      .settings-toggle:hover {
         opacity: 1;
       }
 
-      .music-toggle svg {
-        width: 14px;
-        height: 14px;
+      .settings-toggle.active {
+        transform: rotate(90deg);
+      }
+
+      .settings-toggle svg {
+        width: 18px;
+        height: 18px;
         fill: #77aaff;
+      }
+
+      .settings-dropdown {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        margin-top: 8px;
+        background: rgba(15, 52, 96, 0.95);
+        border: 1px solid rgba(119, 170, 255, 0.3);
+        border-radius: 8px;
+        padding: 12px;
+        min-width: 200px;
+        opacity: 0;
+        transform: translateY(-10px);
+        pointer-events: none;
+        transition: opacity 0.3s ease, transform 0.3s ease;
+        backdrop-filter: blur(10px);
+      }
+
+      .settings-dropdown.active {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+      }
+
+      .settings-section {
+        margin-bottom: 16px;
+      }
+
+      .settings-section:last-child {
+        margin-bottom: 0;
+      }
+
+      .settings-label {
+        display: block;
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 10px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+      }
+
+      .settings-buttons {
+        display: flex;
+        gap: 6px;
+      }
+
+      .settings-button {
+        flex: 1;
+        background: rgba(119, 170, 255, 0.1);
+        border: 1px solid rgba(119, 170, 255, 0.3);
+        border-radius: 4px;
+        color: rgba(255, 255, 255, 0.8);
+        font-size: 11px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        padding: 6px 10px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .settings-button:hover {
+        background: rgba(119, 170, 255, 0.2);
+        border-color: rgba(119, 170, 255, 0.5);
+      }
+
+      .settings-button.active {
+        background: rgba(119, 170, 255, 0.3);
+        border-color: #77aaff;
+        color: #fff;
+      }
+
+      .speed-controls {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+
+      .speed-button {
+        background: rgba(119, 170, 255, 0.1);
+        border: 1px solid rgba(119, 170, 255, 0.3);
+        border-radius: 4px;
+        color: rgba(255, 255, 255, 0.8);
+        font-size: 14px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        width: 28px;
+        height: 28px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .speed-button:hover:not(:disabled) {
+        background: rgba(119, 170, 255, 0.2);
+        border-color: rgba(119, 170, 255, 0.5);
+      }
+
+      .speed-button:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+      }
+
+      .speed-value {
+        color: #77aaff;
+        font-size: 12px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        min-width: 40px;
+        text-align: center;
       }
     </style>
   </head>

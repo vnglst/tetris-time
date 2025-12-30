@@ -13,7 +13,7 @@ import {
   getAbsoluteCells,
 } from "../src/index";
 import { estimateAnimationDurationMs } from "../src/animation";
-import { getModeFromUrl, getTargetDateFromUrl, getCountdownTime, type ClockMode } from "./countdown";
+import { getModeFromUrl, getTargetDateFromUrl, getCountdownTime, getNextNewYear, type ClockMode } from "./countdown";
 
 // Color mapping for digit tetrominos (lit cells)
 // Colors from the Mindful Palette by Alex Cristache
@@ -40,9 +40,8 @@ const FIELD_COLS = TIME_COLS;
 const DIGIT_GAP_COLS = TIME_DIGIT_GAP_COLS;
 const COLON_GAP_COLS = TIME_COLON_GAP_COLS;
 
-// Animation speed multiplier (higher = faster, e.g. 2 = 2x faster)
-// Can be configured via URL parameter: ?speed=5
-const SPEED = (() => {
+// Get initial speed from URL parameter (default: 3)
+const getInitialSpeed = (): number => {
   const params = new URLSearchParams(window.location.search);
   const speedParam = params.get("speed");
   if (speedParam !== null) {
@@ -50,30 +49,28 @@ const SPEED = (() => {
     if (!isNaN(parsed) && parsed > 0) return Math.min(parsed, 10);
   }
   return 3;
-})();
+};
 
-// Mode: 'clock' (default) or 'countdown' via ?mode=countdown
-const MODE: ClockMode = getModeFromUrl();
+// Get initial mode from URL parameter (default: 'clock')
+const getInitialMode = (): ClockMode => getModeFromUrl();
 
-// Target date for countdown mode via ?to=2025-01-01T00:00:00
-const TARGET_DATE: Date | null = getTargetDateFromUrl();
+// Get initial target date from URL parameter
+const getInitialTargetDate = (): Date | null => getTargetDateFromUrl();
 
 // Minimum animation frame duration (1 frame at 60fps)
 const FRAME_MS = 16;
 
-// Scale timing by SPEED with optional minimum
-const scale = (ms: number, min = FRAME_MS) => Math.max(min, Math.round(ms / SPEED));
-
-// Animation timings (scaled by SPEED)
-const DROP_DURATION = scale(500);      // ms per row during gravity fall
-const PIECE_DELAY = scale(600, 0);     // ms between pieces
-const ROTATE_DURATION = scale(400);    // ms per rotation step
-const THINK_DURATION = scale(300, 0);  // ms pause before rotating
-
 // Fixed timings (not affected by SPEED)
-const DISPLAY_PAUSE = 5000;  // ms to show completed time before clearing
-const ROW_CLEAR_DELAY = 60;  // ms between each row clearing
-const FLASH_DURATION = 50;   // ms for each flash cycle
+const DISPLAY_PAUSE = 5000; // ms to show completed time before clearing
+const ROW_CLEAR_DELAY = 60; // ms between each row clearing
+const FLASH_DURATION = 50; // ms for each flash cycle
+
+class AnimationCancelled extends Error {
+  constructor() {
+    super("Animation cancelled");
+    this.name = "AnimationCancelled";
+  }
+}
 
 class TetrisClock {
   private container: HTMLElement;
@@ -84,14 +81,52 @@ class TetrisClock {
   private lockedCells: Set<string> = new Set();
   private countdownFinished = false;
   private audio: HTMLAudioElement | null = null;
-  private musicButton: HTMLButtonElement | null = null;
+  private settingsMenu: HTMLElement | null = null;
+  private settingsDropdown: HTMLElement | null = null;
+  private isSettingsOpen = false;
+  private animationToken = 0;
+
+  // Dynamic settings
+  private speed: number = getInitialSpeed();
+  private mode: ClockMode = getInitialMode();
+  private targetDate: Date | null = getInitialTargetDate();
 
   constructor(containerId: string) {
     const container = document.getElementById(containerId);
     if (!container) throw new Error(`Container ${containerId} not found`);
     this.container = container;
     this.init();
-    this.createMusicToggle();
+    this.initAudio();
+    this.createSettingsMenu();
+  }
+
+  private throwIfCancelled(token: number) {
+    if (token !== this.animationToken) throw new AnimationCancelled();
+  }
+
+  private cancelCurrentAnimation(clear = true) {
+    this.animationToken++;
+    this.isAnimating = false;
+    if (clear) this.clearGrid();
+  }
+
+  // Scale timing by speed with optional minimum
+  private scale(ms: number, min = FRAME_MS): number {
+    return Math.max(min, Math.round(ms / this.speed));
+  }
+
+  // Get animation timings (scaled by current speed)
+  private get DROP_DURATION(): number {
+    return this.scale(500);
+  }
+  private get PIECE_DELAY(): number {
+    return this.scale(600, 0);
+  }
+  private get ROTATE_DURATION(): number {
+    return this.scale(400);
+  }
+  private get THINK_DURATION(): number {
+    return this.scale(300, 0);
   }
 
   private init() {
@@ -166,27 +201,15 @@ class TetrisClock {
     this.colonElement.style.top = `${y}px`;
   }
 
-  private createMusicToggle() {
-    // Create audio element
+  private initAudio() {
     this.audio = new Audio("/Korobeiniki.mp3");
     this.audio.loop = true;
-    // Scale music speed: SPEED 1 ≈ 0.85x, SPEED 3 = 1x, max 1.5x
-    this.audio.playbackRate = Math.min(1.5, Math.max(0.5, 1 + (SPEED - 3) / 14));
-
-    // Create button
-    this.musicButton = document.createElement("button");
-    this.musicButton.className = "music-toggle";
-    this.musicButton.setAttribute("aria-label", "Toggle music");
-    this.updateMusicIcon(false);
-
-    this.musicButton.addEventListener("click", () => this.toggleMusic());
-    this.container.appendChild(this.musicButton);
+    // Scale music speed: speed 1 ≈ 0.85x, speed 3 = 1x, max 1.5x
+    this.audio.playbackRate = Math.min(1.5, Math.max(0.5, 1 + (this.speed - 3) / 14));
 
     // Try to autoplay (may be blocked by browser)
-    this.audio.play().then(() => {
-      this.updateMusicIcon(true);
-    }).catch(() => {
-      // Autoplay blocked, user must click to start
+    this.audio.play().catch(() => {
+      // Autoplay blocked, user must enable via settings
     });
   }
 
@@ -195,31 +218,287 @@ class TetrisClock {
 
     if (this.audio.paused) {
       this.audio.play();
-      this.updateMusicIcon(true);
     } else {
       this.audio.pause();
-      this.updateMusicIcon(false);
     }
   }
 
-  private updateMusicIcon(isPlaying: boolean) {
-    if (!this.musicButton) return;
+  private async setSoundEnabled(enabled: boolean) {
+    if (!this.audio) return;
 
-    if (isPlaying) {
-      // Speaker with sound waves icon
-      this.musicButton.innerHTML = `
-        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
-        </svg>
-      `;
+    if (enabled) {
+      try {
+        await this.audio.play();
+      } catch {
+        // Browser blocked playback; UI will remain "off"
+      }
     } else {
-      // Speaker muted icon
-      this.musicButton.innerHTML = `
-        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
-        </svg>
-      `;
+      this.audio.pause();
     }
+
+    this.updateSoundButtons();
+  }
+
+  private updateSoundButtons() {
+    const isOn = !!this.audio && !this.audio.paused;
+    const onBtn = this.settingsDropdown?.querySelector('[data-sound="on"]') as HTMLButtonElement | null;
+    const offBtn = this.settingsDropdown?.querySelector('[data-sound="off"]') as HTMLButtonElement | null;
+    if (!onBtn || !offBtn) return;
+    if (isOn) {
+      onBtn.classList.add("active");
+      offBtn.classList.remove("active");
+    } else {
+      onBtn.classList.remove("active");
+      offBtn.classList.add("active");
+    }
+  }
+
+  private createSettingsMenu() {
+    // Create menu container
+    this.settingsMenu = document.createElement("div");
+    this.settingsMenu.className = "settings-menu";
+
+    // Create cog icon button
+    const toggleButton = document.createElement("button");
+    toggleButton.className = "settings-toggle";
+    toggleButton.setAttribute("aria-label", "Toggle settings");
+    toggleButton.innerHTML = `
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
+      </svg>
+    `;
+
+    // Create dropdown
+    this.settingsDropdown = document.createElement("div");
+    this.settingsDropdown.className = "settings-dropdown";
+
+    // Mode section
+    const modeSection = document.createElement("div");
+    modeSection.className = "settings-section";
+
+    const modeLabel = document.createElement("span");
+    modeLabel.className = "settings-label";
+    modeLabel.textContent = "Mode";
+
+    const modeButtons = document.createElement("div");
+    modeButtons.className = "settings-buttons";
+
+    const clockButton = document.createElement("button");
+    clockButton.className = "settings-button";
+    clockButton.textContent = "Clock";
+    clockButton.dataset.mode = "clock";
+
+    const countdownButton = document.createElement("button");
+    countdownButton.className = "settings-button";
+    countdownButton.textContent = "New Year";
+    countdownButton.dataset.mode = "countdown";
+
+    // Set active button
+    if (this.mode === "clock") {
+      clockButton.classList.add("active");
+    } else {
+      countdownButton.classList.add("active");
+    }
+
+    modeButtons.appendChild(clockButton);
+    modeButtons.appendChild(countdownButton);
+    modeSection.appendChild(modeLabel);
+    modeSection.appendChild(modeButtons);
+
+    // Speed section
+    const speedSection = document.createElement("div");
+    speedSection.className = "settings-section";
+
+    const speedLabel = document.createElement("span");
+    speedLabel.className = "settings-label";
+    speedLabel.textContent = "Speed";
+
+    const speedControls = document.createElement("div");
+    speedControls.className = "speed-controls";
+
+    const decreaseButton = document.createElement("button");
+    decreaseButton.className = "speed-button";
+    decreaseButton.textContent = "−";
+    decreaseButton.disabled = this.speed <= 1;
+
+    const speedValue = document.createElement("span");
+    speedValue.className = "speed-value";
+    speedValue.textContent = `${this.speed}x`;
+
+    const increaseButton = document.createElement("button");
+    increaseButton.className = "speed-button";
+    increaseButton.textContent = "+";
+    increaseButton.disabled = this.speed >= 10;
+
+    speedControls.appendChild(decreaseButton);
+    speedControls.appendChild(speedValue);
+    speedControls.appendChild(increaseButton);
+    speedSection.appendChild(speedLabel);
+    speedSection.appendChild(speedControls);
+
+    // Add sections to dropdown
+    this.settingsDropdown.appendChild(modeSection);
+    this.settingsDropdown.appendChild(speedSection);
+
+    // Sound section
+    const soundSection = document.createElement("div");
+    soundSection.className = "settings-section";
+
+    const soundLabel = document.createElement("span");
+    soundLabel.className = "settings-label";
+    soundLabel.textContent = "Sound";
+
+    const soundButtons = document.createElement("div");
+    soundButtons.className = "settings-buttons";
+
+    const soundOnButton = document.createElement("button");
+    soundOnButton.className = "settings-button";
+    soundOnButton.textContent = "On";
+    soundOnButton.dataset.sound = "on";
+
+    const soundOffButton = document.createElement("button");
+    soundOffButton.className = "settings-button";
+    soundOffButton.textContent = "Off";
+    soundOffButton.dataset.sound = "off";
+
+    soundButtons.appendChild(soundOnButton);
+    soundButtons.appendChild(soundOffButton);
+    soundSection.appendChild(soundLabel);
+    soundSection.appendChild(soundButtons);
+    this.settingsDropdown.appendChild(soundSection);
+
+    // Add toggle and dropdown to menu
+    this.settingsMenu.appendChild(toggleButton);
+    this.settingsMenu.appendChild(this.settingsDropdown);
+    document.body.appendChild(this.settingsMenu);
+
+    // Event listeners
+    toggleButton.addEventListener("click", () => this.toggleSettings());
+
+    clockButton.addEventListener("click", () => this.setMode("clock"));
+    countdownButton.addEventListener("click", () => this.setMode("countdown"));
+
+    decreaseButton.addEventListener("click", () => this.changeSpeed(-1));
+    increaseButton.addEventListener("click", () => this.changeSpeed(1));
+
+    soundOnButton.addEventListener("click", () => this.setSoundEnabled(true));
+    soundOffButton.addEventListener("click", () => this.setSoundEnabled(false));
+
+    // Initialize sound buttons state
+    this.updateSoundButtons();
+
+    // Close dropdown when clicking outside
+    document.addEventListener("click", (e) => {
+      if (this.settingsMenu && !this.settingsMenu.contains(e.target as Node)) {
+        this.closeSettings();
+      }
+    });
+  }
+
+  private toggleSettings() {
+    this.isSettingsOpen = !this.isSettingsOpen;
+    if (this.isSettingsOpen) {
+      this.settingsDropdown?.classList.add("active");
+      this.settingsMenu?.querySelector(".settings-toggle")?.classList.add("active");
+    } else {
+      this.closeSettings();
+    }
+  }
+
+  private closeSettings() {
+    this.isSettingsOpen = false;
+    this.settingsDropdown?.classList.remove("active");
+    this.settingsMenu?.querySelector(".settings-toggle")?.classList.remove("active");
+  }
+
+  private updateUrlParams() {
+    const url = new URL(window.location.href);
+
+    // Update mode parameter
+    if (this.mode === "countdown") {
+      url.searchParams.set("mode", "countdown");
+      url.searchParams.set("to", "newyear");
+    } else {
+      url.searchParams.delete("mode");
+      url.searchParams.delete("to");
+    }
+
+    // Update speed parameter
+    if (this.speed !== 3) {
+      url.searchParams.set("speed", this.speed.toString());
+    } else {
+      url.searchParams.delete("speed");
+    }
+
+    // Update URL without reloading the page
+    window.history.replaceState({}, "", url.toString());
+  }
+
+  private setMode(mode: ClockMode) {
+    if (this.mode === mode) return;
+
+    // Cancel any in-flight animation and restart immediately.
+    this.cancelCurrentAnimation(true);
+
+    this.mode = mode;
+
+    // Update target date for countdown mode
+    if (mode === "countdown") {
+      this.targetDate = getNextNewYear();
+    } else {
+      this.targetDate = null;
+    }
+
+    // Update button states
+    const buttons = this.settingsDropdown?.querySelectorAll(".settings-button");
+    buttons?.forEach((btn) => {
+      const buttonMode = (btn as HTMLElement).dataset.mode;
+      if (buttonMode === mode) {
+        btn.classList.add("active");
+      } else {
+        btn.classList.remove("active");
+      }
+    });
+
+    // Update URL parameters
+    this.updateUrlParams();
+
+    // Reset countdown state and trigger immediate update
+    this.countdownFinished = false;
+    this.currentTime = null;
+    this.updateTime();
+  }
+
+  private changeSpeed(delta: number) {
+    const newSpeed = Math.max(1, Math.min(10, this.speed + delta));
+    if (newSpeed === this.speed) return;
+
+    this.speed = newSpeed;
+
+    // Update music playback rate
+    if (this.audio) {
+      this.audio.playbackRate = Math.min(1.5, Math.max(0.5, 1 + (this.speed - 3) / 14));
+    }
+
+    // Update speed display
+    const speedValue = this.settingsDropdown?.querySelector(".speed-value");
+    if (speedValue) {
+      speedValue.textContent = `${this.speed}x`;
+    }
+
+    // Update button states
+    const decreaseButton = this.settingsDropdown?.querySelector(".speed-button:first-child") as HTMLButtonElement;
+    const increaseButton = this.settingsDropdown?.querySelector(".speed-button:last-child") as HTMLButtonElement;
+
+    if (decreaseButton) decreaseButton.disabled = this.speed <= 1;
+    if (increaseButton) increaseButton.disabled = this.speed >= 10;
+
+    // Update URL parameters
+    this.updateUrlParams();
+
+    // Trigger immediate update with new speed
+    this.currentTime = null;
+    this.updateTime();
   }
 
   private showColon() {
@@ -295,6 +574,8 @@ class TetrisClock {
   private async updateTime() {
     if (this.isAnimating) return;
 
+    const token = this.animationToken;
+
     // In countdown mode, stop updating once countdown is finished
     if (this.countdownFinished) return;
 
@@ -303,21 +584,21 @@ class TetrisClock {
     let seed: number;
     let logMessage: string;
 
-    if (MODE === "countdown" && TARGET_DATE) {
+    if (this.mode === "countdown" && this.targetDate) {
       // Countdown mode: calculate time remaining
-      const countdown = getCountdownTime(TARGET_DATE);
+      const countdown = getCountdownTime(this.targetDate);
       targetHours = countdown.hours;
       targetMinutes = countdown.minutes;
 
       // Use remaining time as seed so each minute gets a unique animation
       // (like clock mode where seed changes each minute)
-      seed = TARGET_DATE.getTime() + targetHours * 60 + targetMinutes;
+      seed = this.targetDate.getTime() + targetHours * 60 + targetMinutes;
 
       if (countdown.finished) {
         this.countdownFinished = true;
       }
 
-      logMessage = `[tetris-time] mode=countdown target=${TARGET_DATE.toISOString()} remaining=${this.formatHHMM(
+      logMessage = `[tetris-time] mode=countdown target=${this.targetDate.toISOString()} remaining=${this.formatHHMM(
         targetHours,
         targetMinutes
       )} finished=${countdown.finished}`;
@@ -335,15 +616,15 @@ class TetrisClock {
         const m = targetDate.getMinutes();
         const previewTile = tileTimeGrid(h, m, { seed });
         const previewSeq = sequencePieces(previewTile);
-        const nudgeDuration = Math.max(scale(40, FRAME_MS), Math.floor(DROP_DURATION / 3));
-        const rotateDuration = Math.max(ROTATE_DURATION, nudgeDuration);
+        const nudgeDuration = Math.max(this.scale(40, FRAME_MS), Math.floor(this.DROP_DURATION / 3));
+        const rotateDuration = Math.max(this.ROTATE_DURATION, nudgeDuration);
         estimatedMs = estimateAnimationDurationMs(previewSeq, {
           fieldTopPaddingRows: FIELD_TOP_PADDING_ROWS,
           nudgeDurationMs: nudgeDuration,
           rotateDurationMs: rotateDuration,
-          hardDropDurationMs: DROP_DURATION,
-          pieceDelayMs: PIECE_DELAY,
-          thinkDurationMs: THINK_DURATION,
+          hardDropDurationMs: this.DROP_DURATION,
+          pieceDelayMs: this.PIECE_DELAY,
+          thinkDurationMs: this.THINK_DURATION,
           minHardDropDelayMs: FRAME_MS,
         });
 
@@ -362,14 +643,14 @@ class TetrisClock {
       const completionAtStr = this.formatHHMM(completionAt.getHours(), completionAt.getMinutes());
 
       logMessage =
-        `[tetris-time] speed=${SPEED} base=${this.formatHHMM(baseTime.getHours(), baseTime.getMinutes())} ` +
+        `[tetris-time] speed=${this.speed} base=${this.formatHHMM(baseTime.getHours(), baseTime.getMinutes())} ` +
         `target=${this.formatHHMM(targetHours, targetMinutes)} completionAt=${completionAtStr} etaMs=${estimatedMs}`;
     }
 
     // Skip if we'd render the same target time again (clock mode only).
     // In countdown mode, keep animating continuously.
     if (
-      MODE !== "countdown" &&
+      this.mode !== "countdown" &&
       this.currentTime?.hours === targetHours &&
       this.currentTime?.minutes === targetMinutes
     ) {
@@ -382,41 +663,53 @@ class TetrisClock {
     console.log(logMessage);
 
     try {
+      this.throwIfCancelled(token);
       // Solve + animate the target time.
-      const extendedHours = MODE === "countdown";
+      const extendedHours = this.mode === "countdown";
       const tileResult = tileTimeGrid(targetHours, targetMinutes, { seed, extendedHours });
       const sequenceResult = sequencePieces(tileResult);
 
       // Animate one unified field
-      await this.animateField(tileResult, sequenceResult);
+      await this.animateField(tileResult, sequenceResult, token);
     } catch (error) {
+      if (error instanceof AnimationCancelled) {
+        return;
+      }
       console.error("Error updating time:", error);
     } finally {
+      // If a newer animation has started/cancelled, don't enqueue work.
+      if (token !== this.animationToken) return;
       this.isAnimating = false;
       // Immediately check for next animation instead of waiting for setInterval
       this.updateTime();
     }
   }
 
-  private async animateField(_tileResult: TileResult, seqResult: SequenceResult): Promise<void> {
+  private async animateField(_tileResult: TileResult, seqResult: SequenceResult, token: number): Promise<void> {
     if (!seqResult.success) return;
+
+    this.throwIfCancelled(token);
 
     this.clearGrid();
 
     for (let i = 0; i < seqResult.sequence.length; i++) {
+      this.throwIfCancelled(token);
       const seqPiece = seqResult.sequence[i];
-      await this.animatePieceDrop(seqPiece);
-      await this.delay(PIECE_DELAY);
+      await this.animatePieceDrop(seqPiece, token);
+      await this.delay(this.PIECE_DELAY, token);
     }
+
+    this.throwIfCancelled(token);
 
     // Show the colon after all pieces have dropped
     this.showColon();
 
     // Classic Tetris clear animation after time is fully displayed
-    await this.clearRowsAnimation();
+    await this.clearRowsAnimation(token);
   }
 
-  private async animatePieceDrop(seqPiece: SequencedPiece): Promise<void> {
+  private async animatePieceDrop(seqPiece: SequencedPiece, token: number): Promise<void> {
+    this.throwIfCancelled(token);
     const piece = seqPiece.piece;
     // Digit pieces get colorful tetromino colors, background pieces get uniform dark blue
     const color = piece.isLit ? DIGIT_COLORS[piece.type] : BACKGROUND_COLOR;
@@ -434,11 +727,12 @@ class TetrisClock {
     let currentRotation = startRotation;
 
     // Timing for actions (rotation/movement happen faster than gravity)
-    const actionDuration = Math.max(scale(40), Math.floor(DROP_DURATION / 3));
+    const actionDuration = Math.max(this.scale(40), Math.floor(this.DROP_DURATION / 3));
     // Gravity: piece falls 1 row per DROP_DURATION ms
-    const gravityInterval = DROP_DURATION;
+    const gravityInterval = this.DROP_DURATION;
 
     const renderAt = () => {
+      if (token !== this.animationToken) return;
       const nextKeys = new Set<string>();
       const absCells = getAbsoluteCells(tetromino, currentRotation, currentAnchor);
 
@@ -507,12 +801,13 @@ class TetrisClock {
     const startTime = performance.now();
     let lastGravityTime = startTime;
     // Offset action time by THINK_DURATION to create a "thinking" pause before rotating
-    let lastActionTime = startTime + THINK_DURATION;
+    let lastActionTime = startTime + this.THINK_DURATION;
     let actionIndex = 0;
 
     // Continue until piece reaches final row AND all actions are complete
     while (currentAnchor.row < piece.anchor.row || actionIndex < actions.length) {
-      const now = await this.nextFrame();
+      const now = await this.nextFrame(token);
+      this.throwIfCancelled(token);
       let stateChanged = false;
 
       // Apply gravity if enough time has passed and we haven't reached final row
@@ -547,13 +842,16 @@ class TetrisClock {
       ) {
         // Animate quick drop to final position with minimum visibility delay
         while (currentAnchor.row < piece.anchor.row) {
+          this.throwIfCancelled(token);
           currentAnchor = { row: currentAnchor.row + 1, col: currentAnchor.col };
           renderAt();
-          await this.delay(FRAME_MS);
+          await this.delay(FRAME_MS, token);
         }
         break;
       }
     }
+
+    this.throwIfCancelled(token);
 
     // Lock at final position
     currentAnchor = { row: piece.anchor.row, col: piece.anchor.col };
@@ -569,11 +867,15 @@ class TetrisClock {
    * This ensures all visual updates happen at frame boundaries,
    * eliminating mid-frame updates that cause flickering.
    */
-  private delay(ms: number): Promise<void> {
+  private delay(ms: number, token?: number): Promise<void> {
     if (ms <= 0) return Promise.resolve();
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const start = performance.now();
       const tick = (now: number) => {
+        if (token !== undefined && token !== this.animationToken) {
+          reject(new AnimationCancelled());
+          return;
+        }
         if (now - start >= ms) {
           resolve();
         } else {
@@ -584,15 +886,25 @@ class TetrisClock {
     });
   }
 
-  private nextFrame(): Promise<number> {
-    return new Promise((resolve) => requestAnimationFrame(resolve));
+  private nextFrame(token?: number): Promise<number> {
+    return new Promise((resolve, reject) => {
+      requestAnimationFrame((now) => {
+        if (token !== undefined && token !== this.animationToken) {
+          reject(new AnimationCancelled());
+          return;
+        }
+        resolve(now);
+      });
+    });
   }
 
-  private async clearRowsAnimation(): Promise<void> {
+  private async clearRowsAnimation(token: number): Promise<void> {
     if (!this.grid) return;
 
+    this.throwIfCancelled(token);
+
     // Pause to let the user see the completed time
-    await this.delay(DISPLAY_PAUSE);
+    await this.delay(DISPLAY_PAUSE, token);
 
     // Cache filled cells with their colors to avoid repeated DOM queries
     const filledCells: Array<{ cell: HTMLElement; color: string; row: number }> = [];
@@ -608,17 +920,18 @@ class TetrisClock {
     // Classic Tetris flash effect - blink all filled cells
     const flashCount = 4;
     for (let flash = 0; flash < flashCount; flash++) {
+      this.throwIfCancelled(token);
       // Flash to white - batch all updates
       for (const { cell } of filledCells) {
         cell.style.backgroundColor = "#ffffff";
       }
-      await this.delay(FLASH_DURATION);
+      await this.delay(FLASH_DURATION, token);
 
       // Flash back to original color - batch all updates
       for (const { cell, color } of filledCells) {
         cell.style.backgroundColor = color;
       }
-      await this.delay(FLASH_DURATION);
+      await this.delay(FLASH_DURATION, token);
     }
 
     // Group cells by row for efficient clearing
@@ -631,13 +944,14 @@ class TetrisClock {
     // Clear rows from bottom to top (classic Tetris style)
     const sortedRows = [...rowGroups.keys()].sort((a, b) => b - a);
     for (const row of sortedRows) {
+      this.throwIfCancelled(token);
       const cells = rowGroups.get(row)!;
       // Clear all cells in row with batched style reset
       for (const cell of cells) {
         cell.className = "cell empty";
         cell.style.cssText = "";
       }
-      await this.delay(ROW_CLEAR_DELAY);
+      await this.delay(ROW_CLEAR_DELAY, token);
     }
 
     this.lockedCells.clear();
