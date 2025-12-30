@@ -170,6 +170,8 @@ class TetrisClock {
     // Create audio element
     this.audio = new Audio("/Korobeiniki.mp3");
     this.audio.loop = true;
+    // Scale music speed: SPEED 1 ≈ 0.85x, SPEED 3 = 1x, max 1.5x
+    this.audio.playbackRate = Math.min(1.5, Math.max(0.5, 1 + (SPEED - 3) / 14));
 
     // Create button
     this.musicButton = document.createElement("button");
@@ -179,6 +181,13 @@ class TetrisClock {
 
     this.musicButton.addEventListener("click", () => this.toggleMusic());
     this.container.appendChild(this.musicButton);
+
+    // Try to autoplay (may be blocked by browser)
+    this.audio.play().then(() => {
+      this.updateMusicIcon(true);
+    }).catch(() => {
+      // Autoplay blocked, user must click to start
+    });
   }
 
   private toggleMusic() {
