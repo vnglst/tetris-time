@@ -375,16 +375,3 @@ function tryReorderForValidSequence(
   };
 }
 
-/**
- * Sequence a digit tile result
- */
-export function sequenceDigit(result: TileResult): SequenceResult {
-  return sequencePieces(result);
-}
-
-/**
- * Sequence multiple digit tile results (for a full time display)
- */
-export function sequenceTime(results: TileResult[]): SequenceResult[] {
-  return results.map((result) => sequencePieces(result));
-}

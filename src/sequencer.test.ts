@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { sequencePieces, sequenceDigit, sequenceTime } from "./sequencer";
+import { sequencePieces } from "./sequencer";
 import { tileDigit, tileTime, tileGrid, tileTimeGrid, TIME_ROWS, TIME_COLS } from "./solver";
 import { TileResult } from "./types";
 
@@ -91,12 +91,12 @@ describe("sequencePieces", () => {
   });
 });
 
-describe("sequenceDigit", () => {
+describe("sequencePieces with digits", () => {
   it("should sequence digit 0", () => {
     const tileResult = tileDigit(0, { seed: 42 });
     expect(tileResult.success).toBe(true);
 
-    const seqResult = sequenceDigit(tileResult);
+    const seqResult = sequencePieces(tileResult);
 
     expect(seqResult.success).toBe(true);
     expect(seqResult.sequence.length).toBe(15); // 60 cells / 4 = 15 pieces
@@ -109,7 +109,7 @@ describe("sequenceDigit", () => {
       const tileResult = tileDigit(d, { seed: 100 + d });
       expect(tileResult.success, `Digit ${d} tiling should succeed`).toBe(true);
 
-      const seqResult = sequenceDigit(tileResult);
+      const seqResult = sequencePieces(tileResult);
       expect(seqResult.success, `Digit ${d} sequencing should succeed`).toBe(true);
       expect(seqResult.sequence.length).toBe(15);
     }
@@ -117,7 +117,7 @@ describe("sequenceDigit", () => {
 
   it("should include rotation steps when needed", () => {
     const tileResult = tileDigit(5, { seed: 42 });
-    const seqResult = sequenceDigit(tileResult);
+    const seqResult = sequencePieces(tileResult);
 
     expect(seqResult.success).toBe(true);
 
@@ -133,7 +133,7 @@ describe("sequenceDigit", () => {
 
   it("should include horizontal move steps", () => {
     const tileResult = tileDigit(1, { seed: 42 });
-    const seqResult = sequenceDigit(tileResult);
+    const seqResult = sequencePieces(tileResult);
 
     expect(seqResult.success).toBe(true);
 
@@ -148,10 +148,10 @@ describe("sequenceDigit", () => {
   });
 });
 
-describe("sequenceTime", () => {
+describe("sequencePieces with time", () => {
   it("should sequence time 12:34", () => {
     const tileResults = tileTime(12, 34, { seed: 42 });
-    const seqResults = sequenceTime(tileResults);
+    const seqResults = tileResults.map((r) => sequencePieces(r));
 
     expect(seqResults.length).toBe(4);
 
@@ -163,7 +163,7 @@ describe("sequenceTime", () => {
 
   it("should handle 00:00", () => {
     const tileResults = tileTime(0, 0, { seed: 42 });
-    const seqResults = sequenceTime(tileResults);
+    const seqResults = tileResults.map((r) => sequencePieces(r));
 
     expect(seqResults.length).toBe(4);
     seqResults.forEach((r) => expect(r.success).toBe(true));
@@ -171,7 +171,7 @@ describe("sequenceTime", () => {
 
   it("should handle 23:59", () => {
     const tileResults = tileTime(23, 59, { seed: 42 });
-    const seqResults = sequenceTime(tileResults);
+    const seqResults = tileResults.map((r) => sequencePieces(r));
 
     expect(seqResults.length).toBe(4);
     seqResults.forEach((r) => expect(r.success).toBe(true));
@@ -378,7 +378,7 @@ describe("piece placement order variation", () => {
 describe("step generation", () => {
   it("should generate spawn, optional rotate, optional move, drop, lock sequence", () => {
     const tileResult = tileDigit(8, { seed: 42 });
-    const seqResult = sequenceDigit(tileResult);
+    const seqResult = sequencePieces(tileResult);
 
     expect(seqResult.success).toBe(true);
 
@@ -414,7 +414,7 @@ describe("step generation", () => {
 
   it("should have drop steps that decrease row by 1 each time", () => {
     const tileResult = tileDigit(3, { seed: 42 });
-    const seqResult = sequenceDigit(tileResult);
+    const seqResult = sequencePieces(tileResult);
 
     expect(seqResult.success).toBe(true);
 

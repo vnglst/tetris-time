@@ -10,7 +10,7 @@ export const TIME_DIGIT_GAP_COLS = 2;
 export const TIME_COLON_GAP_COLS = 4;
 
 /** Extra unlit rows inserted above the HH:MM digits in the unified time grid. */
-export const TIME_TOP_UNLIT_ROWS = 2;
+const TIME_TOP_UNLIT_ROWS = 2;
 
 /** Unified time grid dimensions (HH:MM rendered into one solver grid). */
 export const TIME_ROWS = DIGIT_ROWS + TIME_TOP_UNLIT_ROWS;

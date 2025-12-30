@@ -35,4 +35,4 @@ export {
 } from "./solver";
 
 // Sequencer API
-export { sequencePieces, sequenceDigit, sequenceTime } from "./sequencer";
+export { sequencePieces } from "./sequencer";
