@@ -31,7 +31,19 @@ Before completing any feature or bug fix, always run:
 1. `npm test` - All tests must pass
 2. `npm run typecheck` - No type errors allowed
 
-Important: When a feature is complete and the user confirms it works as expected commit changes using all the user prompts and input as a single commit message.
+### Committing Changes
+
+When the user asks to commit, use ALL user prompts from the conversation as the commit message (not a summary). Each prompt should be on its own line. Example:
+
+```
+Can you make sure it also displays on mobile and other screen sizes.
+
+It needs a little more margin on iPhone 12 Pro when in landscape mode.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+```
 
 ## Architecture
 
