@@ -275,9 +275,9 @@
 
       /* Music toggle button */
       .music-toggle {
-        position: absolute;
-        top: -32px;
-        right: var(--grid-padding);
+        position: fixed;
+        top: 20px;
+        right: 20px;
         background: transparent;
         border: none;
         border-radius: 4px;
@@ -288,6 +288,7 @@
         padding: 6px;
         opacity: 0.7;
         transition: opacity 0.2s ease;
+        z-index: 1000;
       }
 
       .music-toggle:hover {
