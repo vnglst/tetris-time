@@ -347,11 +347,12 @@ describe("piece placement order variation", () => {
 
     expect(seqResult.success).toBe(true);
 
-    // Get the bottom row (maxRow = 9 for TIME_ROWS = 10)
+    // Get the bottom row
+    const bottomRow = TIME_ROWS - 1;
     const bottomRowPieces: { col: number; order: number }[] = [];
     for (const seqPiece of seqResult.sequence) {
       const maxRow = Math.max(...seqPiece.piece.cells.map((c) => c.row));
-      if (maxRow === 9) {
+      if (maxRow === bottomRow) {
         const minCol = Math.min(...seqPiece.piece.cells.map((c) => c.col));
         bottomRowPieces.push({ col: minCol, order: seqPiece.order });
       }
@@ -372,7 +373,6 @@ describe("piece placement order variation", () => {
 
     expect(isStrictlyLeftToRight).toBe(false);
   });
-
 });
 
 describe("step generation", () => {

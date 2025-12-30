@@ -9,8 +9,11 @@ export const TIME_DIGIT_GAP_COLS = 2;
 /** Default spacing (in columns) for the HH|MM separator area (where the colon sits visually). */
 export const TIME_COLON_GAP_COLS = 4;
 
+/** Extra unlit rows inserted above the HH:MM digits in the unified time grid. */
+export const TIME_TOP_UNLIT_ROWS = 2;
+
 /** Unified time grid dimensions (HH:MM rendered into one solver grid). */
-export const TIME_ROWS = DIGIT_ROWS;
+export const TIME_ROWS = DIGIT_ROWS + TIME_TOP_UNLIT_ROWS;
 export const TIME_COLS = DIGIT_COLS * 4 + TIME_DIGIT_GAP_COLS * 2 + TIME_COLON_GAP_COLS;
 
 /** Default maximum attempts before giving up */
@@ -158,6 +161,35 @@ function backtrack(grid: Grid, placements: Placement[], random: SeededRandom, st
   return false;
 }
 
+function tileUniformRectangle(rows: number, cols: number, value: boolean, options?: TileOptions): TileResult {
+  const startTime = performance.now();
+  const mask: DigitMask = Array.from({ length: rows }, () => Array(cols).fill(value));
+
+  // Fast deterministic tiling for even-sized rectangles using O pieces.
+  // This avoids backtracking blow-ups for thin strips like 2×N.
+  if (rows % 2 === 0 && cols % 2 === 0) {
+    resetPieceIdCounter();
+    const grid = new Grid(rows, cols, mask);
+    const o = TETROMINOES.O;
+
+    for (let r = 0; r < rows; r += 2) {
+      for (let c = 0; c < cols; c += 2) {
+        grid.place(o, 0, { row: r, col: c });
+      }
+    }
+
+    return {
+      success: true,
+      pieces: grid.getPlacedPieces(),
+      grid: grid.getCells(),
+      stats: { attempts: 0, backtracks: 0, duration: performance.now() - startTime },
+    };
+  }
+
+  // Fallback to the general solver for odd dimensions.
+  return tileGrid(rows, cols, mask, options);
+}
+
 /**
  * Tile a grid with the given mask.
  */
@@ -301,6 +333,7 @@ export function tileTimeGrid(
   const digitGapCols = options?.digitGapCols ?? TIME_DIGIT_GAP_COLS;
   const colonGapCols = options?.colonGapCols ?? TIME_COLON_GAP_COLS;
   const totalCols = DIGIT_COLS * 4 + digitGapCols * 2 + colonGapCols;
+  const topRows = TIME_TOP_UNLIT_ROWS;
 
   const baseSeed = seedToNumber(options?.seed);
 
@@ -331,21 +364,27 @@ export function tileTimeGrid(
   });
   const d3 = tileDigit(digits[3], { ...options, seed: baseSeed + 3 });
 
+  const top =
+    topRows > 0
+      ? tileUniformRectangle(topRows, totalCols, false, { ...options, seed: baseSeed + 20 })
+      : { success: true, pieces: [], grid: [], stats: { attempts: 0, backtracks: 0, duration: 0 } };
+
   const parts = [
-    { result: d0, colOffset: 0 },
-    { result: g0, colOffset: DIGIT_COLS },
-    { result: d1, colOffset: DIGIT_COLS + digitGapCols },
-    { result: g1, colOffset: DIGIT_COLS * 2 + digitGapCols },
-    { result: d2, colOffset: DIGIT_COLS * 2 + digitGapCols + colonGapCols },
-    { result: g2, colOffset: DIGIT_COLS * 3 + digitGapCols + colonGapCols },
-    { result: d3, colOffset: DIGIT_COLS * 3 + digitGapCols * 2 + colonGapCols },
+    { result: top, rowOffset: 0, colOffset: 0 },
+    { result: d0, rowOffset: topRows, colOffset: 0 },
+    { result: g0, rowOffset: topRows, colOffset: DIGIT_COLS },
+    { result: d1, rowOffset: topRows, colOffset: DIGIT_COLS + digitGapCols },
+    { result: g1, rowOffset: topRows, colOffset: DIGIT_COLS * 2 + digitGapCols },
+    { result: d2, rowOffset: topRows, colOffset: DIGIT_COLS * 2 + digitGapCols + colonGapCols },
+    { result: g2, rowOffset: topRows, colOffset: DIGIT_COLS * 3 + digitGapCols + colonGapCols },
+    { result: d3, rowOffset: topRows, colOffset: DIGIT_COLS * 3 + digitGapCols * 2 + colonGapCols },
   ];
 
   if (parts.some((p) => !p.result.success)) {
     return {
       success: false,
       pieces: [],
-      grid: Array.from({ length: DIGIT_ROWS }, () => Array(totalCols).fill(null)),
+      grid: Array.from({ length: DIGIT_ROWS + topRows }, () => Array(totalCols).fill(null)),
       stats: {
         attempts: parts.reduce((sum, p) => sum + (p.result.stats?.attempts ?? 0), 0),
         backtracks: parts.reduce((sum, p) => sum + (p.result.stats?.backtracks ?? 0), 0),
@@ -354,7 +393,8 @@ export function tileTimeGrid(
     };
   }
 
-  const grid: (PlacedTetromino | null)[][] = Array.from({ length: DIGIT_ROWS }, () => Array(totalCols).fill(null));
+  const totalRows = DIGIT_ROWS + topRows;
+  const grid: (PlacedTetromino | null)[][] = Array.from({ length: totalRows }, () => Array(totalCols).fill(null));
   const pieces: PlacedTetromino[] = [];
   let combinedId = 0;
 
@@ -363,8 +403,8 @@ export function tileTimeGrid(
       const piece: PlacedTetromino = {
         ...original,
         id: `piece-${++combinedId}`,
-        anchor: { row: original.anchor.row, col: original.anchor.col + part.colOffset },
-        cells: original.cells.map((c) => ({ row: c.row, col: c.col + part.colOffset })),
+        anchor: { row: original.anchor.row + part.rowOffset, col: original.anchor.col + part.colOffset },
+        cells: original.cells.map((c) => ({ row: c.row + part.rowOffset, col: c.col + part.colOffset })),
       };
 
       pieces.push(piece);
@@ -375,7 +415,7 @@ export function tileTimeGrid(
   }
 
   // Ensure full coverage
-  for (let r = 0; r < DIGIT_ROWS; r++) {
+  for (let r = 0; r < totalRows; r++) {
     for (let c = 0; c < totalCols; c++) {
       if (grid[r][c] === null) {
         return {

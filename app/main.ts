@@ -1,6 +1,7 @@
 import {
   DIGIT_ROWS,
   DIGIT_COLS,
+  TIME_ROWS,
   TIME_COLS,
   TIME_DIGIT_GAP_COLS,
   TIME_COLON_GAP_COLS,
@@ -33,7 +34,7 @@ const BACKGROUND_COLOR = "#1a3a5c"; // Dark blue
 
 // Visual playfield sizing (keep digit solver size unchanged)
 const FIELD_TOP_PADDING_ROWS = 10;
-const FIELD_ROWS = DIGIT_ROWS + FIELD_TOP_PADDING_ROWS;
+const FIELD_ROWS = TIME_ROWS + FIELD_TOP_PADDING_ROWS;
 
 // Unified display sizing
 const FIELD_COLS = TIME_COLS;
@@ -192,8 +193,10 @@ class TetrisClock {
     const COLON_WIDTH_PX = parseFloat(styles.getPropertyValue("--colon-dot-size")) || 16;
 
     // Align colon vertically with the digit area (not the padded spawn area).
-    // Digit rows occupy the bottom DIGIT_ROWS rows; padding is at the top.
-    const digitAreaCenterRow = FIELD_TOP_PADDING_ROWS + (DIGIT_ROWS - 1) / 2;
+    // The unified solver grid includes TIME_ROWS total rows; digits occupy the bottom DIGIT_ROWS
+    // of that (i.e., TIME_ROWS - DIGIT_ROWS rows of unlit background above the digits).
+    const digitRowOffset = TIME_ROWS - DIGIT_ROWS;
+    const digitAreaCenterRow = FIELD_TOP_PADDING_ROWS + digitRowOffset + (DIGIT_ROWS - 1) / 2;
     const y = PADDING_PX + digitAreaCenterRow * (CELL_PX + GAP_PX) + CELL_PX / 2;
 
     const x = PADDING_PX + colonCenterCol * (CELL_PX + GAP_PX) + CELL_PX / 2 - COLON_WIDTH_PX / 2;
