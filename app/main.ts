@@ -72,9 +72,9 @@ const BASE_DROP_DURATION = 500; // ms per row (gravity interval)
 const BASE_PIECE_DELAY = 600; // ms between pieces
 const BASE_ROTATE_DURATION = 400; // ms per rotation step
 const BASE_THINK_DURATION = 300; // ms pause before rotating (human-like thinking)
-const BASE_DISPLAY_PAUSE = 2000; // ms to display completed time before clearing
-const BASE_ROW_CLEAR_DELAY = 80; // ms between each row clearing
-const BASE_FLASH_DURATION = 100; // ms for each flash cycle
+const BASE_DISPLAY_PAUSE = 3000; // ms to display completed time before clearing
+const BASE_ROW_CLEAR_DELAY = 110; // ms between each row clearing
+const BASE_FLASH_DURATION = 150; // ms for each flash cycle
 const MIN_HARD_DROP_DELAY = 16; // ms minimum delay per row during hard drop (ensures visibility)
 
 const DROP_DURATION = scaleMs(BASE_DROP_DURATION, MIN_ANIM_STEP_MS);
@@ -241,8 +241,9 @@ class TetrisClock {
       targetHours = countdown.hours;
       targetMinutes = countdown.minutes;
 
-      // Use target date as seed for deterministic rendering
-      seed = TARGET_DATE.getTime();
+      // Use remaining time as seed so each minute gets a unique animation
+      // (like clock mode where seed changes each minute)
+      seed = TARGET_DATE.getTime() + targetHours * 60 + targetMinutes;
 
       if (countdown.finished) {
         this.countdownFinished = true;
@@ -293,8 +294,9 @@ class TetrisClock {
         `target=${this.formatHHMM(targetHours, targetMinutes)} completionAt=${completionAtStr} etaMs=${estimatedMs}`;
     }
 
-    // Skip if we'd render the same target time again.
-    if (this.currentTime?.hours === targetHours && this.currentTime?.minutes === targetMinutes) {
+    // Skip if we'd render the same target time again (clock mode only).
+    // In countdown mode, keep animating continuously.
+    if (MODE !== "countdown" && this.currentTime?.hours === targetHours && this.currentTime?.minutes === targetMinutes) {
       return;
     }
 
