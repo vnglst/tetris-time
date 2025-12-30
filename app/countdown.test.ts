@@ -48,23 +48,38 @@ describe("getTargetDateFromUrl", () => {
     expect(getTargetDateFromUrl()).toBeNull();
   });
 
-  it("parses ISO 8601 date correctly", () => {
+  it("parses ISO 8601 date as UTC (adds Z if no timezone)", () => {
     vi.stubGlobal("location", { search: "?to=2025-01-01T00:00:00" });
     const result = getTargetDateFromUrl();
     expect(result).not.toBeNull();
-    expect(result?.getFullYear()).toBe(2025);
-    expect(result?.getMonth()).toBe(0); // January is 0
-    expect(result?.getDate()).toBe(1);
-    expect(result?.getHours()).toBe(0);
-    expect(result?.getMinutes()).toBe(0);
+    // Should be interpreted as UTC, so getUTCHours should be 0
+    expect(result?.getUTCFullYear()).toBe(2025);
+    expect(result?.getUTCMonth()).toBe(0); // January is 0
+    expect(result?.getUTCDate()).toBe(1);
+    expect(result?.getUTCHours()).toBe(0);
+    expect(result?.getUTCMinutes()).toBe(0);
   });
 
-  it("parses ISO 8601 date with timezone", () => {
+  it("parses ISO 8601 date with explicit Z timezone", () => {
     vi.stubGlobal("location", { search: "?to=2025-12-31T23:59:00Z" });
     const result = getTargetDateFromUrl();
     expect(result).not.toBeNull();
-    // The date object will be in local time, but represents the same moment
-    expect(result instanceof Date).toBe(true);
+    expect(result?.getUTCFullYear()).toBe(2025);
+    expect(result?.getUTCMonth()).toBe(11); // December
+    expect(result?.getUTCDate()).toBe(31);
+    expect(result?.getUTCHours()).toBe(23);
+    expect(result?.getUTCMinutes()).toBe(59);
+  });
+
+  it("parses ISO 8601 date with timezone offset", () => {
+    // +05:00 offset means 19:00 UTC
+    vi.stubGlobal("location", { search: "?to=2025-01-01T00:00:00+05:00" });
+    const result = getTargetDateFromUrl();
+    expect(result).not.toBeNull();
+    expect(result?.getUTCFullYear()).toBe(2024);
+    expect(result?.getUTCMonth()).toBe(11); // December
+    expect(result?.getUTCDate()).toBe(31);
+    expect(result?.getUTCHours()).toBe(19);
   });
 
   it("returns null for invalid date strings", () => {
@@ -75,6 +90,32 @@ describe("getTargetDateFromUrl", () => {
   it("returns null for empty 'to' parameter", () => {
     vi.stubGlobal("location", { search: "?to=" });
     expect(getTargetDateFromUrl()).toBeNull();
+  });
+
+  it("handles 'newyear' special value", () => {
+    vi.stubGlobal("location", { search: "?to=newyear" });
+    const now = new Date("2024-12-15T10:00:00Z");
+    const result = getTargetDateFromUrl(now);
+    expect(result).not.toBeNull();
+    // Should return midnight Jan 1, 2025 in local timezone
+    expect(result?.getFullYear()).toBe(2025);
+    expect(result?.getMonth()).toBe(0);
+    expect(result?.getDate()).toBe(1);
+    expect(result?.getHours()).toBe(0);
+    expect(result?.getMinutes()).toBe(0);
+  });
+
+  it("handles 'newyear' when already past new year, returns next year", () => {
+    vi.stubGlobal("location", { search: "?to=newyear" });
+    // After midnight on Jan 1st
+    const now = new Date("2025-01-01T12:00:00Z");
+    const result = getTargetDateFromUrl(now);
+    expect(result).not.toBeNull();
+    // Should return Jan 1, 2026 (next new year)
+    expect(result?.getFullYear()).toBe(2026);
+    expect(result?.getMonth()).toBe(0);
+    expect(result?.getDate()).toBe(1);
+    expect(result?.getHours()).toBe(0);
   });
 });
 

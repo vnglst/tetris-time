@@ -20,18 +20,49 @@ export function getModeFromUrl(): ClockMode {
 }
 
 /**
+ * Get the next New Year's midnight in the user's local timezone.
+ * If it's already past midnight on Jan 1st, returns next year's New Year.
+ */
+export function getNextNewYear(now: Date = new Date()): Date {
+  const year = now.getFullYear();
+  // Create midnight Jan 1st in local timezone
+  const thisNewYear = new Date(year, 0, 1, 0, 0, 0, 0);
+
+  // If we're past this year's new year, return next year's
+  if (now >= thisNewYear) {
+    return new Date(year + 1, 0, 1, 0, 0, 0, 0);
+  }
+  return thisNewYear;
+}
+
+/**
  * Parse the target date from URL 'to' parameter.
- * Expects ISO 8601 format (e.g., 2025-01-01T00:00:00).
+ * - ISO 8601 format dates are interpreted as UTC (e.g., 2025-01-01T00:00:00 means midnight UTC)
+ * - Special value "newyear" returns the next New Year's midnight in user's local timezone
  * Returns null if not present or invalid.
  */
-export function getTargetDateFromUrl(): Date | null {
+export function getTargetDateFromUrl(now: Date = new Date()): Date | null {
   const params = new URLSearchParams(window.location.search);
   const toParam = params.get("to");
   if (!toParam) {
     return null;
   }
 
-  const date = new Date(toParam);
+  // Handle special "newyear" value - returns next New Year in local timezone
+  if (toParam.toLowerCase() === "newyear") {
+    return getNextNewYear(now);
+  }
+
+  // URL decode issue: + in URLs is decoded as space, convert back for positive offsets
+  const normalizedParam = toParam.replace(/ (\d{2}:\d{2})$/, "+$1");
+
+  // Check if the date string already has timezone info (Z or +/-offset)
+  const hasTimezone = /Z$|[+-]\d{2}:\d{2}$/.test(normalizedParam);
+
+  // If no timezone specified, treat as UTC by appending 'Z'
+  const dateString = hasTimezone ? normalizedParam : normalizedParam + "Z";
+
+  const date = new Date(dateString);
   if (isNaN(date.getTime())) {
     return null;
   }
