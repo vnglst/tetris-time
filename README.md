@@ -23,8 +23,8 @@ Use the `to` parameter to count down to a specific date:
 Use the `speed` parameter to control animation speed (default: 3, higher = faster):
 
 - **Slow:** [?speed=1](https://tetris-time.koenvangilst.nl/?speed=1)
-- **Fast:** [?speed=20](https://tetris-time.koenvangilst.nl/?speed=20)
-- **Combined:** [?to=newyear&speed=20](https://tetris-time.koenvangilst.nl/?to=newyear&speed=20)
+- **Fast:** [?speed=10](https://tetris-time.koenvangilst.nl/?speed=10)
+- **Combined:** [?to=newyear&speed=10](https://tetris-time.koenvangilst.nl/?to=newyear&speed=10)
 
 ## Development
 
