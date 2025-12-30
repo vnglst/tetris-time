@@ -114,6 +114,9 @@ class TetrisClock {
     this.container.appendChild(this.colonElement);
     this.positionColon();
 
+    // Reposition colon on resize (handles orientation changes and responsive breakpoints)
+    window.addEventListener("resize", () => this.positionColon());
+
     // Start the clock
     this.updateTime();
     setInterval(() => this.updateTime(), 1000);
@@ -153,11 +156,12 @@ class TetrisClock {
     const colonGapStartCol = DIGIT_COLS * 2 + DIGIT_GAP_COLS;
     const colonCenterCol = colonGapStartCol + (COLON_GAP_COLS - 1) / 2;
 
-    // Keep these in sync with CSS in index.html
-    const CELL_PX = 24;
-    const GAP_PX = 2;
-    const PADDING_PX = 8;
-    const COLON_WIDTH_PX = 16;
+    // Read CSS variables from the container for responsive sizing
+    const styles = getComputedStyle(this.container);
+    const CELL_PX = parseFloat(styles.getPropertyValue("--cell-size")) || 24;
+    const GAP_PX = parseFloat(styles.getPropertyValue("--cell-gap")) || 2;
+    const PADDING_PX = parseFloat(styles.getPropertyValue("--grid-padding")) || 8;
+    const COLON_WIDTH_PX = parseFloat(styles.getPropertyValue("--colon-dot-size")) || 16;
 
     // Align colon vertically with the digit area (not the padded spawn area).
     // Digit rows occupy the bottom DIGIT_ROWS rows; padding is at the top.

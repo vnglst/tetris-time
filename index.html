@@ -67,21 +67,118 @@
       .clock-container {
         position: relative;
         display: inline-block;
+        margin: 16px;
+        --cell-size: 24px;
+        --cell-gap: 2px;
+        --grid-padding: 8px;
+        --colon-dot-size: 16px;
+        --colon-gap: 40px;
+        --cell-radius: 4px;
       }
 
       .digit-grid {
         display: grid;
-        gap: 2px;
+        gap: var(--cell-gap);
         background: rgba(0, 0, 0, 0.3);
-        padding: 8px;
+        padding: var(--grid-padding);
         border-radius: 8px;
       }
 
       .cell {
-        width: 24px;
-        height: 24px;
-        border-radius: 4px;
+        width: var(--cell-size);
+        height: var(--cell-size);
+        border-radius: var(--cell-radius);
         transition: background-color 0.1s ease;
+      }
+
+      /* Responsive sizing for different screen widths */
+      @media (max-width: 1100px) {
+        .clock-container {
+          --cell-size: 20px;
+          --cell-gap: 2px;
+          --grid-padding: 6px;
+          --colon-dot-size: 14px;
+          --colon-gap: 32px;
+          --cell-radius: 3px;
+        }
+      }
+
+      @media (max-width: 900px) {
+        .clock-container {
+          --cell-size: 16px;
+          --cell-gap: 2px;
+          --grid-padding: 5px;
+          --colon-dot-size: 12px;
+          --colon-gap: 26px;
+          --cell-radius: 3px;
+        }
+      }
+
+      @media (max-width: 720px) {
+        .clock-container {
+          --cell-size: 12px;
+          --cell-gap: 1px;
+          --grid-padding: 4px;
+          --colon-dot-size: 10px;
+          --colon-gap: 20px;
+          --cell-radius: 2px;
+        }
+      }
+
+      @media (max-width: 540px) {
+        .clock-container {
+          --cell-size: 9px;
+          --cell-gap: 1px;
+          --grid-padding: 3px;
+          --colon-dot-size: 8px;
+          --colon-gap: 15px;
+          --cell-radius: 2px;
+        }
+      }
+
+      @media (max-width: 400px) {
+        .clock-container {
+          --cell-size: 7px;
+          --cell-gap: 1px;
+          --grid-padding: 2px;
+          --colon-dot-size: 6px;
+          --colon-gap: 12px;
+          --cell-radius: 1px;
+        }
+      }
+
+      /* Landscape mode on mobile - scale based on viewport height */
+      @media (max-height: 500px) {
+        .clock-container {
+          --cell-size: 12px;
+          --cell-gap: 1px;
+          --grid-padding: 4px;
+          --colon-dot-size: 10px;
+          --colon-gap: 20px;
+          --cell-radius: 2px;
+        }
+      }
+
+      @media (max-height: 400px) {
+        .clock-container {
+          --cell-size: 10px;
+          --cell-gap: 1px;
+          --grid-padding: 3px;
+          --colon-dot-size: 8px;
+          --colon-gap: 16px;
+          --cell-radius: 2px;
+        }
+      }
+
+      @media (max-height: 320px) {
+        .clock-container {
+          --cell-size: 8px;
+          --cell-gap: 1px;
+          --grid-padding: 2px;
+          --colon-dot-size: 6px;
+          --colon-gap: 12px;
+          --cell-radius: 1px;
+        }
       }
 
       .cell.empty {
@@ -94,13 +191,13 @@
         transform: translateY(-50%);
         display: flex;
         flex-direction: column;
-        gap: 40px;
+        gap: var(--colon-gap);
         pointer-events: none;
       }
 
       .colon-dot {
-        width: 16px;
-        height: 16px;
+        width: var(--colon-dot-size);
+        height: var(--colon-dot-size);
         background: #77aaff;
         border-radius: 50%;
       }
