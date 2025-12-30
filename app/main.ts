@@ -40,51 +40,40 @@ const FIELD_COLS = TIME_COLS;
 const DIGIT_GAP_COLS = TIME_DIGIT_GAP_COLS;
 const COLON_GAP_COLS = TIME_COLON_GAP_COLS;
 
-// Animation speed
-// Increase to speed up everything (e.g. 2 = ~2x faster, 0.5 = ~2x slower).
+// Animation speed multiplier (higher = faster, e.g. 2 = 2x faster)
 // Can be configured via URL parameter: ?speed=5
-const getSpeedFromUrl = (): number => {
+const SPEED = (() => {
   const params = new URLSearchParams(window.location.search);
   const speedParam = params.get("speed");
   if (speedParam !== null) {
     const parsed = parseFloat(speedParam);
-    if (!isNaN(parsed) && parsed > 0) {
-      return parsed;
-    }
+    if (!isNaN(parsed) && parsed > 0) return parsed;
   }
-  return 3; // default speed
-};
-const SPEED = getSpeedFromUrl();
+  return 3;
+})();
 
-// Mode configuration: 'clock' (default) or 'countdown'
-// Can be configured via URL parameter: ?mode=countdown
+// Mode: 'clock' (default) or 'countdown' via ?mode=countdown
 const MODE: ClockMode = getModeFromUrl();
 
-// Target date for countdown mode
-// Can be configured via URL parameter: ?to=2025-01-01T00:00:00
+// Target date for countdown mode via ?to=2025-01-01T00:00:00
 const TARGET_DATE: Date | null = getTargetDateFromUrl();
 
-const MIN_ANIM_STEP_MS = 16;
-const scaleMs = (baseMs: number, minMs = 0): number => Math.max(minMs, Math.round(baseMs / SPEED));
+// Minimum animation frame duration (1 frame at 60fps)
+const FRAME_MS = 16;
 
-// Animation timing (base values at SPEED = 1)
-const BASE_DROP_DURATION = 500; // ms per row (gravity interval)
-const BASE_PIECE_DELAY = 600; // ms between pieces
-const BASE_ROTATE_DURATION = 400; // ms per rotation step
-const BASE_THINK_DURATION = 300; // ms pause before rotating (human-like thinking)
-const BASE_DISPLAY_PAUSE = 5000; // ms to display completed time before clearing
-const BASE_ROW_CLEAR_DELAY = 60; // ms between each row clearing
-const BASE_FLASH_DURATION = 50; // ms for each flash cycle
-const MIN_HARD_DROP_DELAY = 16; // ms minimum delay per row during hard drop (ensures visibility)
+// Scale timing by SPEED with optional minimum
+const scale = (ms: number, min = FRAME_MS) => Math.max(min, Math.round(ms / SPEED));
 
-const DROP_DURATION = scaleMs(BASE_DROP_DURATION, MIN_ANIM_STEP_MS);
-const PIECE_DELAY = scaleMs(BASE_PIECE_DELAY, 0);
-const ROTATE_DURATION = scaleMs(BASE_ROTATE_DURATION, MIN_ANIM_STEP_MS);
-const THINK_DURATION = scaleMs(BASE_THINK_DURATION, 0);
+// Animation timings (scaled by SPEED)
+const DROP_DURATION = scale(500);      // ms per row during gravity fall
+const PIECE_DELAY = scale(600, 0);     // ms between pieces
+const ROTATE_DURATION = scale(400);    // ms per rotation step
+const THINK_DURATION = scale(300, 0);  // ms pause before rotating
 
-const DISPLAY_PAUSE = BASE_DISPLAY_PAUSE; // keep full pause time
-const FLASH_DURATION = BASE_FLASH_DURATION; // keep full flash time
-const ROW_CLEAR_DELAY = BASE_ROW_CLEAR_DELAY; // keep full row clear delay
+// Fixed timings (not affected by SPEED)
+const DISPLAY_PAUSE = 5000;  // ms to show completed time before clearing
+const ROW_CLEAR_DELAY = 60;  // ms between each row clearing
+const FLASH_DURATION = 50;   // ms for each flash cycle
 
 class TetrisClock {
   private container: HTMLElement;
@@ -282,7 +271,7 @@ class TetrisClock {
         const m = targetDate.getMinutes();
         const previewTile = tileTimeGrid(h, m, { seed });
         const previewSeq = sequencePieces(previewTile);
-        const nudgeDuration = Math.max(scaleMs(40, MIN_ANIM_STEP_MS), Math.floor(DROP_DURATION / 3));
+        const nudgeDuration = Math.max(scale(40, FRAME_MS), Math.floor(DROP_DURATION / 3));
         const rotateDuration = Math.max(ROTATE_DURATION, nudgeDuration);
         estimatedMs = estimateAnimationDurationMs(previewSeq, {
           fieldTopPaddingRows: FIELD_TOP_PADDING_ROWS,
@@ -291,7 +280,7 @@ class TetrisClock {
           hardDropDurationMs: DROP_DURATION,
           pieceDelayMs: PIECE_DELAY,
           thinkDurationMs: THINK_DURATION,
-          minHardDropDelayMs: MIN_HARD_DROP_DELAY,
+          minHardDropDelayMs: FRAME_MS,
         });
 
         const nextTarget = new Date(baseTime.getTime() + estimatedMs);
@@ -381,7 +370,7 @@ class TetrisClock {
     let currentRotation = startRotation;
 
     // Timing for actions (rotation/movement happen faster than gravity)
-    const actionDuration = Math.max(scaleMs(40), Math.floor(DROP_DURATION / 3));
+    const actionDuration = Math.max(scale(40), Math.floor(DROP_DURATION / 3));
     // Gravity: piece falls 1 row per DROP_DURATION ms
     const gravityInterval = DROP_DURATION;
 
@@ -496,7 +485,7 @@ class TetrisClock {
         while (currentAnchor.row < piece.anchor.row) {
           currentAnchor = { row: currentAnchor.row + 1, col: currentAnchor.col };
           renderAt();
-          await this.delay(MIN_HARD_DROP_DELAY);
+          await this.delay(FRAME_MS);
         }
         break;
       }
