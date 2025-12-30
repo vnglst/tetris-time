@@ -81,7 +81,7 @@ const DROP_DURATION = scaleMs(BASE_DROP_DURATION, MIN_ANIM_STEP_MS);
 const PIECE_DELAY = scaleMs(BASE_PIECE_DELAY, 0);
 const ROTATE_DURATION = scaleMs(BASE_ROTATE_DURATION, MIN_ANIM_STEP_MS);
 const THINK_DURATION = scaleMs(BASE_THINK_DURATION, 0);
-const DISPLAY_PAUSE = scaleMs(BASE_DISPLAY_PAUSE, 0);
+const DISPLAY_PAUSE = BASE_DISPLAY_PAUSE; // keep full pause time
 const ROW_CLEAR_DELAY = scaleMs(BASE_ROW_CLEAR_DELAY, MIN_ANIM_STEP_MS);
 const FLASH_DURATION = scaleMs(BASE_FLASH_DURATION, MIN_ANIM_STEP_MS);
 
@@ -184,12 +184,11 @@ class TetrisClock {
 
     this.lockedCells.clear();
 
+    // Batch all cell resets for single repaint
     const cells = grid.querySelectorAll(".cell");
     cells.forEach((cell) => {
       cell.className = "cell empty";
-      (cell as HTMLElement).style.backgroundColor = "";
-      (cell as HTMLElement).style.opacity = "";
-      (cell as HTMLElement).style.transform = "";
+      (cell as HTMLElement).style.cssText = "";
     });
   }
 
@@ -200,20 +199,18 @@ class TetrisClock {
   private setCellOccupied(row: number, col: number, pieceType: string, color: string) {
     const cell = this.getCell(row, col);
     if (!cell) return;
+    // Batch style changes using cssText for single repaint
     cell.className = `cell ${pieceType}`;
-    cell.style.backgroundColor = color;
-    cell.style.opacity = "1";
-    cell.style.transform = "";
+    cell.style.cssText = `background-color: ${color}; opacity: 1;`;
   }
 
   private setCellEmptyIfUnlocked(row: number, col: number) {
     if (this.lockedCells.has(this.cellKey(row, col))) return;
     const cell = this.getCell(row, col);
     if (!cell) return;
+    // Batch style reset using cssText for single repaint
     cell.className = "cell empty";
-    cell.style.backgroundColor = "";
-    cell.style.opacity = "";
-    cell.style.transform = "";
+    cell.style.cssText = "";
   }
 
   private formatHHMM(hours: number, minutes: number): string {
@@ -253,7 +250,10 @@ class TetrisClock {
         this.countdownFinished = true;
       }
 
-      logMessage = `[tetris-time] mode=countdown target=${TARGET_DATE.toISOString()} remaining=${this.formatHHMM(targetHours, targetMinutes)} finished=${countdown.finished}`;
+      logMessage = `[tetris-time] mode=countdown target=${TARGET_DATE.toISOString()} remaining=${this.formatHHMM(
+        targetHours,
+        targetMinutes
+      )} finished=${countdown.finished}`;
     } else {
       // Clock mode: use current time with fixed-point iteration
       const baseTime = this.floorToMinute(new Date());
@@ -294,13 +294,18 @@ class TetrisClock {
       const completionAt = new Date(baseTime.getTime() + estimatedMs);
       const completionAtStr = this.formatHHMM(completionAt.getHours(), completionAt.getMinutes());
 
-      logMessage = `[tetris-time] speed=${SPEED} base=${this.formatHHMM(baseTime.getHours(), baseTime.getMinutes())} ` +
+      logMessage =
+        `[tetris-time] speed=${SPEED} base=${this.formatHHMM(baseTime.getHours(), baseTime.getMinutes())} ` +
         `target=${this.formatHHMM(targetHours, targetMinutes)} completionAt=${completionAtStr} etaMs=${estimatedMs}`;
     }
 
     // Skip if we'd render the same target time again (clock mode only).
     // In countdown mode, keep animating continuously.
-    if (MODE !== "countdown" && this.currentTime?.hours === targetHours && this.currentTime?.minutes === targetMinutes) {
+    if (
+      MODE !== "countdown" &&
+      this.currentTime?.hours === targetHours &&
+      this.currentTime?.minutes === targetMinutes
+    ) {
       return;
     }
 
@@ -487,9 +492,24 @@ class TetrisClock {
     activeKeys = new Set();
   }
 
+  /**
+   * Frame-synced delay using requestAnimationFrame.
+   * This ensures all visual updates happen at frame boundaries,
+   * eliminating mid-frame updates that cause flickering.
+   */
   private delay(ms: number): Promise<void> {
     if (ms <= 0) return Promise.resolve();
-    return new Promise((resolve) => setTimeout(resolve, ms));
+    return new Promise((resolve) => {
+      const start = performance.now();
+      const tick = (now: number) => {
+        if (now - start >= ms) {
+          resolve();
+        } else {
+          requestAnimationFrame(tick);
+        }
+      };
+      requestAnimationFrame(tick);
+    });
   }
 
   private nextFrame(): Promise<number> {
@@ -502,13 +522,13 @@ class TetrisClock {
     // Pause to let the user see the completed time
     await this.delay(DISPLAY_PAUSE);
 
-    // Store original colors before flashing
-    const originalColors: Map<string, string> = new Map();
+    // Cache filled cells with their colors to avoid repeated DOM queries
+    const filledCells: Array<{ cell: HTMLElement; color: string; row: number }> = [];
     for (let row = 0; row < FIELD_ROWS; row++) {
       for (let col = 0; col < FIELD_COLS; col++) {
         const cell = this.getCell(row, col);
         if (cell && !cell.classList.contains("empty")) {
-          originalColors.set(this.cellKey(row, col), cell.style.backgroundColor);
+          filledCells.push({ cell, color: cell.style.backgroundColor, row });
         }
       }
     }
@@ -516,53 +536,36 @@ class TetrisClock {
     // Classic Tetris flash effect - blink all filled cells
     const flashCount = 4;
     for (let flash = 0; flash < flashCount; flash++) {
-      // Flash to white
-      for (const [key] of originalColors) {
-        const [row, col] = key.split(",").map(Number);
-        const cell = this.getCell(row, col);
-        if (cell) {
-          cell.style.backgroundColor = "#ffffff";
-        }
+      // Flash to white - batch all updates
+      for (const { cell } of filledCells) {
+        cell.style.backgroundColor = "#ffffff";
       }
       await this.delay(FLASH_DURATION);
 
-      // Flash back to original color
-      for (const [key, color] of originalColors) {
-        const [row, col] = key.split(",").map(Number);
-        const cell = this.getCell(row, col);
-        if (cell) {
-          cell.style.backgroundColor = color;
-        }
+      // Flash back to original color - batch all updates
+      for (const { cell, color } of filledCells) {
+        cell.style.backgroundColor = color;
       }
       await this.delay(FLASH_DURATION);
     }
 
+    // Group cells by row for efficient clearing
+    const rowGroups = new Map<number, HTMLElement[]>();
+    for (const { cell, row } of filledCells) {
+      if (!rowGroups.has(row)) rowGroups.set(row, []);
+      rowGroups.get(row)!.push(cell);
+    }
+
     // Clear rows from bottom to top (classic Tetris style)
-    for (let row = FIELD_ROWS - 1; row >= 0; row--) {
-      let hasFilledCell = false;
-
-      // Check if row has any filled cells
-      for (let col = 0; col < FIELD_COLS; col++) {
-        const cell = this.getCell(row, col);
-        if (cell && !cell.classList.contains("empty")) {
-          hasFilledCell = true;
-          break;
-        }
+    const sortedRows = [...rowGroups.keys()].sort((a, b) => b - a);
+    for (const row of sortedRows) {
+      const cells = rowGroups.get(row)!;
+      // Clear all cells in row with batched style reset
+      for (const cell of cells) {
+        cell.className = "cell empty";
+        cell.style.cssText = "";
       }
-
-      if (hasFilledCell) {
-        // Clear this row with a quick animation
-        for (let col = 0; col < FIELD_COLS; col++) {
-          const cell = this.getCell(row, col);
-          if (cell && !cell.classList.contains("empty")) {
-            cell.className = "cell empty";
-            cell.style.backgroundColor = "";
-            cell.style.opacity = "";
-            cell.style.transform = "";
-          }
-        }
-        await this.delay(ROW_CLEAR_DELAY);
-      }
+      await this.delay(ROW_CLEAR_DELAY);
     }
 
     this.lockedCells.clear();

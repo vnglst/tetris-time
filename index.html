@@ -88,7 +88,10 @@
         width: var(--cell-size);
         height: var(--cell-size);
         border-radius: var(--cell-radius);
-        transition: background-color 0.1s ease;
+        /* Use GPU-accelerated properties for smoother rendering */
+        will-change: background-color, opacity;
+        transform: translateZ(0);
+        contain: strict;
       }
 
       /* Responsive sizing for different screen widths */
