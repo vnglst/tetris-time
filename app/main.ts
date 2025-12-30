@@ -72,18 +72,19 @@ const BASE_DROP_DURATION = 500; // ms per row (gravity interval)
 const BASE_PIECE_DELAY = 600; // ms between pieces
 const BASE_ROTATE_DURATION = 400; // ms per rotation step
 const BASE_THINK_DURATION = 300; // ms pause before rotating (human-like thinking)
-const BASE_DISPLAY_PAUSE = 10000; // ms to display completed time before clearing
-const BASE_ROW_CLEAR_DELAY = 110; // ms between each row clearing
-const BASE_FLASH_DURATION = 150; // ms for each flash cycle
+const BASE_DISPLAY_PAUSE = 5000; // ms to display completed time before clearing
+const BASE_ROW_CLEAR_DELAY = 60; // ms between each row clearing
+const BASE_FLASH_DURATION = 50; // ms for each flash cycle
 const MIN_HARD_DROP_DELAY = 16; // ms minimum delay per row during hard drop (ensures visibility)
 
 const DROP_DURATION = scaleMs(BASE_DROP_DURATION, MIN_ANIM_STEP_MS);
 const PIECE_DELAY = scaleMs(BASE_PIECE_DELAY, 0);
 const ROTATE_DURATION = scaleMs(BASE_ROTATE_DURATION, MIN_ANIM_STEP_MS);
 const THINK_DURATION = scaleMs(BASE_THINK_DURATION, 0);
+
 const DISPLAY_PAUSE = BASE_DISPLAY_PAUSE; // keep full pause time
-const ROW_CLEAR_DELAY = scaleMs(BASE_ROW_CLEAR_DELAY, MIN_ANIM_STEP_MS);
-const FLASH_DURATION = scaleMs(BASE_FLASH_DURATION, MIN_ANIM_STEP_MS);
+const FLASH_DURATION = BASE_FLASH_DURATION; // keep full flash time
+const ROW_CLEAR_DELAY = BASE_ROW_CLEAR_DELAY; // keep full row clear delay
 
 class TetrisClock {
   private container: HTMLElement;
@@ -326,6 +327,8 @@ class TetrisClock {
       console.error("Error updating time:", error);
     } finally {
       this.isAnimating = false;
+      // Immediately check for next animation instead of waiting for setInterval
+      this.updateTime();
     }
   }
 
