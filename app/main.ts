@@ -41,7 +41,7 @@ const COLON_GAP_COLS = TIME_COLON_GAP_COLS;
 
 // Animation speed
 // Increase to speed up everything (e.g. 2 = ~2x faster, 0.5 = ~2x slower).
-const SPEED = 10;
+const SPEED = 3;
 
 const MIN_ANIM_STEP_MS = 16;
 const scaleMs = (baseMs: number, minMs = 0): number => Math.max(minMs, Math.round(baseMs / SPEED));
@@ -54,6 +54,7 @@ const BASE_THINK_DURATION = 300; // ms pause before rotating (human-like thinkin
 const BASE_DISPLAY_PAUSE = 2000; // ms to display completed time before clearing
 const BASE_ROW_CLEAR_DELAY = 80; // ms between each row clearing
 const BASE_FLASH_DURATION = 100; // ms for each flash cycle
+const MIN_HARD_DROP_DELAY = 16; // ms minimum delay per row during hard drop (ensures visibility)
 
 const DROP_DURATION = scaleMs(BASE_DROP_DURATION, MIN_ANIM_STEP_MS);
 const PIECE_DELAY = scaleMs(BASE_PIECE_DELAY, 0);
@@ -226,6 +227,7 @@ class TetrisClock {
         hardDropDurationMs: DROP_DURATION,
         pieceDelayMs: PIECE_DELAY,
         thinkDurationMs: THINK_DURATION,
+        minHardDropDelayMs: MIN_HARD_DROP_DELAY,
       });
 
       const nextTarget = new Date(baseTime.getTime() + estimatedMs);
@@ -413,11 +415,11 @@ class TetrisClock {
         currentAnchor.col === piece.anchor.col &&
         currentRotation === targetRotation
       ) {
-        // Animate quick drop to final position
+        // Animate quick drop to final position with minimum visibility delay
         while (currentAnchor.row < piece.anchor.row) {
           currentAnchor = { row: currentAnchor.row + 1, col: currentAnchor.col };
           renderAt();
-          await this.nextFrame();
+          await this.delay(MIN_HARD_DROP_DELAY);
         }
         break;
       }
