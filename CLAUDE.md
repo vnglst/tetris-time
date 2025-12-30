@@ -20,7 +20,6 @@ Always write tests first:
 
 ```bash
 npm test          # Run all tests (single run)
-npm run test:watch # Run tests in watch mode
 npm run typecheck # TypeScript type checking
 ```
 
@@ -47,20 +46,6 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
 
 ## Architecture
 
-### Core Library (`src/`)
-
-- **types.ts** - TypeScript interfaces for all data structures
-- **tetrominoes.ts** - 7 Tetris pieces with all rotations
-- **digits.ts** - Binary masks for digits 0-9
-- **grid.ts** - Grid class with placement logic and constraints
-- **solver.ts** - Backtracking algorithm to tile grids with tetrominoes
-- **sequencer.ts** - Determines piece drop order for valid Tetris gameplay
-- **animation.ts** - Animation duration estimation utilities
-
-### Frontend (`app/`)
-
-- **main.ts** - TetrisClock class that renders and animates the clock
-
 ## Key Design Principles
 
 ### Tetris Mechanics
@@ -71,8 +56,6 @@ Pieces must follow real Tetris physics:
 - Fall due to gravity
 - Land on floor OR on already-placed pieces
 - First piece always lands at the bottom
-
-Tests verify this in `src/sequencer.test.ts` under "Tetris mechanics".
 
 ### Coloring
 
@@ -93,11 +76,3 @@ npm run build     # Build for production
 npm test          # Run tests
 npm run typecheck # Type check without emitting
 ```
-
-## Animation Speed
-
-The `SPEED` constant in `app/main.ts` controls animation speed:
-
-- `SPEED = 1` - Normal speed
-- `SPEED = 2` - 2x faster
-- `SPEED = 0.5` - 2x slower
